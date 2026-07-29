@@ -76,65 +76,69 @@ class SymGeneEvolver:
         for cb in self.callbacks:
             cb.on_train_begin()
 
-        for gen in range(self.n_gen):
-            for pop in self.populations:
-                pop.apply_schedule(gen)
-                self._evolve_population(pop, X, y[pop.name])
-
-            if self.cross_population and len(self.populations) > 1:
-                self._interpop_step(X, y)
-
-            if (self.migration
-                    and len(self.populations) > 1
-                    and gen > 0
-                    and gen % self.migration_freq == 0):
-                from symgene.operators.migration import migrate
-                migrate(
-                    self.populations,
-                    topology=self.migration_topology,
-                    size=self.migration_size,
-                    selection=self.migration_selection,
-                    replace=self.migration_replace,
-                )
-                if self.verbose >= 2:
-                    print(f"  Gen {gen}: migration ({self.migration_topology},"
-                          f" size={self.migration_size})")
-
-            for pop in self.populations:
-                pop.evaluate(X, y[pop.name])
-
-            for pop in self.populations:
-                best = pop.best
-                entry = {
-                    "gen": gen,
-                    "train_mse": best.fitness.values[0] if best else 1e9,
-                }
-                if X_val is not None and y_val is not None:
-                    y_pred_val = self._predict_individual(best, pop, X_val)
-                    entry["val_r2"] = (
-                        r2(y_val[pop.name], y_pred_val)
-                        if y_pred_val is not None
-                        else None
-                    )
-                pop_histories[pop.name].append(entry)
-
-            if self.verbose >= 1 and gen % max(1, self.n_gen // 20) == 0:
+        try:
+            for gen in range(self.n_gen):
                 for pop in self.populations:
-                    best_fit = pop.best.fitness.values[0] if pop.best else "?"
-                    print(f"Gen {gen:4d} | {pop.name} | fitness={best_fit:.6f}")
+                    pop.apply_schedule(gen)
+                    self._evolve_population(pop, X, y[pop.name])
 
-            if self.checkpoint_dir and (gen + 1) % self.checkpoint_every == 0:
-                self._save_checkpoint(gen)
+                if self.cross_population and len(self.populations) > 1:
+                    self._interpop_step(X, y)
 
-            logs = self._build_logs(gen, pop_histories)
-            stop_signals = [cb.on_generation_end(gen, logs) for cb in self.callbacks]
-            if any(s is True for s in stop_signals):
-                if self.verbose >= 1:
-                    print(f"  Early stopping at generation {gen}")
-                break
+                if (self.migration
+                        and len(self.populations) > 1
+                        and gen > 0
+                        and gen % self.migration_freq == 0):
+                    from symgene.operators.migration import migrate
+                    migrate(
+                        self.populations,
+                        topology=self.migration_topology,
+                        size=self.migration_size,
+                        selection=self.migration_selection,
+                        replace=self.migration_replace,
+                    )
+                    if self.verbose >= 2:
+                        print(f"  Gen {gen}: migration ({self.migration_topology},"
+                              f" size={self.migration_size})")
 
-        for cb in self.callbacks:
-            cb.on_train_end()
+                for pop in self.populations:
+                    pop.evaluate(X, y[pop.name])
+
+                for pop in self.populations:
+                    best = pop.best
+                    entry = {
+                        "gen": gen,
+                        "train_mse": best.fitness.values[0] if best else 1e9,
+                    }
+                    if X_val is not None and y_val is not None:
+                        y_pred_val = self._predict_individual(best, pop, X_val)
+                        entry["val_r2"] = (
+                            r2(y_val[pop.name], y_pred_val)
+                            if y_pred_val is not None
+                            else None
+                        )
+                    pop_histories[pop.name].append(entry)
+
+                if self.verbose >= 1 and gen % max(1, self.n_gen // 20) == 0:
+                    for pop in self.populations:
+                        best_fit = pop.best.fitness.values[0] if pop.best else "?"
+                        print(f"Gen {gen:4d} | {pop.name} | fitness={best_fit:.6f}")
+
+                if self.checkpoint_dir and (gen + 1) % self.checkpoint_every == 0:
+                    self._save_checkpoint(gen)
+
+                logs = self._build_logs(gen, pop_histories)
+                stop_signals = [cb.on_generation_end(gen, logs) for cb in self.callbacks]
+                if any(s is True for s in stop_signals):
+                    if self.verbose >= 1:
+                        print(f"  Early stopping at generation {gen}")
+                    break
+        finally:
+            for cb in self.callbacks:
+                try:
+                    cb.on_train_end()
+                except Exception:
+                    pass
 
         from symgene.results import SymGeneResult, PopulationResult
         return SymGeneResult({

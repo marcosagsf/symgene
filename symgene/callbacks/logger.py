@@ -36,3 +36,11 @@ class GenerationLogger(Callback):
         if self._fh:
             self._fh.close()
             self._fh = None
+
+    def __del__(self):
+        if self._fh is not None:
+            try:
+                self._fh.close()
+            except Exception:
+                pass
+            self._fh = None
