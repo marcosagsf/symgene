@@ -110,3 +110,93 @@ def test_evolver_stops_on_early_stopping_signal():
     # If early stopping worked, history should have at most 3 entries (gen 0,1,2)
     history = results["p"].history_
     assert len(history) <= 3
+
+
+from symgene.callbacks.early_stopping import EarlyStopping
+from symgene.callbacks.scheduler import ParameterScheduler, ReduceOnPlateau
+
+
+def test_early_stopping_triggers():
+    cb = EarlyStopping(monitor="pop1_train_mse", patience=3, min_delta=1e-4)
+    cb.on_train_begin()
+    log_values = [0.5, 0.499, 0.498, 0.497, 0.497, 0.497, 0.497]
+    results = [cb.on_generation_end(i, {"gen": i, "pop1_train_mse": v}) for i, v in enumerate(log_values)]
+    assert True in results
+
+
+def test_early_stopping_no_trigger_with_improvement():
+    cb = EarlyStopping(monitor="pop1_train_mse", patience=5, min_delta=1e-4)
+    cb.on_train_begin()
+    result = None
+    for i in range(10):
+        result = cb.on_generation_end(i, {"gen": i, "pop1_train_mse": 1.0 / (i + 1)})
+    assert result is None
+
+
+def test_early_stopping_maximize_mode():
+    cb = EarlyStopping(monitor="pop1_val_r2", patience=2, min_delta=1e-4, mode="max")
+    cb.on_train_begin()
+    results = [cb.on_generation_end(i, {"gen": i, "pop1_val_r2": 0.8}) for i in range(5)]
+    assert True in results
+
+
+def test_early_stopping_missing_monitor_ignored():
+    cb = EarlyStopping(monitor="does_not_exist", patience=2)
+    cb.on_train_begin()
+    result = None
+    for i in range(5):
+        result = cb.on_generation_end(i, {"gen": i, "pop1_train_mse": 0.5})
+    assert result is None
+
+
+def test_early_stopping_resets_on_train_begin():
+    cb = EarlyStopping(monitor="pop1_train_mse", patience=2)
+    cb.on_train_begin()
+    for i in range(5):
+        cb.on_generation_end(i, {"gen": i, "pop1_train_mse": 0.5})
+    cb.on_train_begin()
+    result = cb.on_generation_end(0, {"gen": 0, "pop1_train_mse": 0.9})
+    assert result is None
+
+
+def test_parameter_scheduler_fires_at_gen():
+    class FakePop:
+        cxpb = 0.9
+    pop = FakePop()
+    cb = ParameterScheduler(target=pop, param="cxpb", schedule={0: 0.9, 5: 0.5, 10: 0.3})
+    cb.on_generation_end(0, {})
+    assert pop.cxpb == 0.9
+    cb.on_generation_end(4, {})
+    assert pop.cxpb == 0.9
+    cb.on_generation_end(5, {})
+    assert pop.cxpb == 0.5
+    cb.on_generation_end(10, {})
+    assert pop.cxpb == 0.3
+
+
+def test_reduce_on_plateau_fires():
+    class FakePop:
+        mutpb = 0.4
+    pop = FakePop()
+    cb = ReduceOnPlateau(
+        target=pop, param="mutpb", monitor="pop1_train_mse",
+        factor=0.5, patience=3, min_delta=1e-6,
+    )
+    cb.on_train_begin()
+    for i in range(10):
+        cb.on_generation_end(i, {"gen": i, "pop1_train_mse": 0.5})
+    assert pop.mutpb < 0.4
+
+
+def test_reduce_on_plateau_min_value():
+    class FakePop:
+        lr = 0.1
+    pop = FakePop()
+    cb = ReduceOnPlateau(
+        target=pop, param="lr", monitor="pop1_train_mse",
+        factor=0.1, patience=1, min_value=0.01,
+    )
+    cb.on_train_begin()
+    for i in range(20):
+        cb.on_generation_end(i, {"gen": i, "pop1_train_mse": 0.5})
+    assert pop.lr >= 0.01
