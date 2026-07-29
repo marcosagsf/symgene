@@ -133,6 +133,19 @@ class PopulationResult:
         ax_.legend()
         if ax is None: plt.tight_layout(); plt.show()
 
+    def plot_expression_tree(self, gene_idx: int = 0, ax=None):
+        from symgene.visualization.expression import plot_tree
+        ind = self.best_individual_
+        if ind is None or len(ind) == 0:
+            return
+        gene_idx = min(gene_idx, len(ind) - 1)
+        plot_tree(
+            ind[gene_idx],
+            feature_names=self._pop.pset.feature_names,
+            ax=ax,
+            title=f"Gene {gene_idx + 1} — {self._pop.name}",
+        )
+
     @property
     def pareto_front_(self) -> list:
         hof = list(self._pop._hof)
