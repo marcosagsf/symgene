@@ -17,9 +17,10 @@ class RankSelection:
         ranked_indices = sorted(range(n), key=lambda i: fitnesses[i], reverse=not minimize)
         ranks = np.zeros(n)
         for rank_pos, orig_idx in enumerate(ranked_indices):
-            ranks[orig_idx] = rank_pos + 1  # rank 1 = best
+            ranks[orig_idx] = n - 1 - rank_pos  # rank=n-1 = best, rank=0 = worst
+        # Linear rank selection: P(i) = (2-SP)/N + 2*i*(SP-1)/(N*(N-1)), i=rank
         probs = (2 - self.pressure) / n + \
-                2 * (ranks - 1) * (self.pressure - 1) / (n * (n - 1))
+                2 * ranks * (self.pressure - 1) / (n * (n - 1))
         probs = np.clip(probs, 0.0, None)
         probs /= probs.sum()
         indices = np.random.choice(n, size=k, replace=True, p=probs)
