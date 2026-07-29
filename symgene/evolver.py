@@ -109,6 +109,7 @@ class SymGeneEvolver:
                     entry = {
                         "gen": gen,
                         "train_mse": best.fitness.values[0] if best else 1e9,
+                        "n_genes": len(best) if best else 0,
                     }
                     if X_val is not None and y_val is not None:
                         y_pred_val = self._predict_individual(best, pop, X_val)

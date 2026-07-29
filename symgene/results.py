@@ -146,6 +146,12 @@ class PopulationResult:
             title=f"Gene {gene_idx + 1} — {self._pop.name}",
         )
 
+    def plot_gene_weights(self, ax=None):
+        from symgene.visualization.population_stats import plot_gene_weights
+        coef = self.coefficients_
+        if coef is not None:
+            plot_gene_weights(coef, pop_name=self._pop.name, ax=ax)
+
     @property
     def pareto_front_(self) -> list:
         hof = list(self._pop._hof)
