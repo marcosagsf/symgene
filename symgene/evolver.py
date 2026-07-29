@@ -46,6 +46,16 @@ class SymGeneEvolver:
         self.migration_selection = migration_selection
         self.migration_replace = migration_replace
 
+    def _build_logs(self, gen: int, pop_histories: dict) -> dict:
+        logs = {"gen": gen}
+        for pop_name, history in pop_histories.items():
+            if history:
+                entry = history[-1]
+                for k, v in entry.items():
+                    if k != "gen":
+                        logs[f"{pop_name}_{k}"] = v
+        return logs
+
     def fit(
         self,
         X: np.ndarray,
@@ -62,6 +72,9 @@ class SymGeneEvolver:
             pop.evaluate(X, y[pop.name])
 
         pop_histories = {pop.name: [] for pop in self.populations}
+
+        for cb in self.callbacks:
+            cb.on_train_begin()
 
         for gen in range(self.n_gen):
             for pop in self.populations:
@@ -113,8 +126,15 @@ class SymGeneEvolver:
             if self.checkpoint_dir and (gen + 1) % self.checkpoint_every == 0:
                 self._save_checkpoint(gen)
 
-            for cb in self.callbacks:
-                cb.on_generation_end(gen, pop_histories)
+            logs = self._build_logs(gen, pop_histories)
+            stop_signals = [cb.on_generation_end(gen, logs) for cb in self.callbacks]
+            if any(s is True for s in stop_signals):
+                if self.verbose >= 1:
+                    print(f"  Early stopping at generation {gen}")
+                break
+
+        for cb in self.callbacks:
+            cb.on_train_end()
 
         from symgene.results import SymGeneResult, PopulationResult
         return SymGeneResult({
@@ -184,12 +204,15 @@ class SymGeneEvolver:
             return None
 
     def _save_checkpoint(self, gen: int):
-        import pickle
         import os
+        try:
+            import dill as _pickle
+        except ImportError:
+            import pickle as _pickle
         os.makedirs(self.checkpoint_dir, exist_ok=True)
         path = os.path.join(self.checkpoint_dir, f"gen_{gen:04d}.sgk")
         with open(path, "wb") as f:
-            pickle.dump(self, f)
+            _pickle.dump(self, f)
         if self.verbose >= 1:
             print(f"  Checkpoint saved: {path}")
 
