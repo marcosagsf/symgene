@@ -102,3 +102,134 @@ def test_selection_pluggable_in_population():
     pop = Population("p", pset, n_genes=2, pop_size=10, n_genes_max=4, selection=sel)
     pop.initialize(seed=0)
     pop.evaluate(np.random.rand(20, 2), np.random.rand(20))
+
+
+from symgene.selection.lexicase import LexicaseSelection
+
+
+def _make_pop_with_case_errors(n_inds=10, n_cases=20):
+    rng = np.random.default_rng(7)
+
+    class IndWithErrors:
+        def __init__(self, errors, fitness_value):
+            self._case_errors = errors
+            self.fitness_value = fitness_value
+
+    return [
+        IndWithErrors(rng.uniform(0, 1, n_cases), rng.uniform(0, 1))
+        for _ in range(n_inds)
+    ]
+
+
+def test_lexicase_returns_k():
+    pop = _make_pop_with_case_errors(10, 20)
+    sel = LexicaseSelection()
+    selected = sel.select(pop, k=5)
+    assert len(selected) == 5
+
+
+def test_lexicase_all_selected_from_pool():
+    pop = _make_pop_with_case_errors(8, 15)
+    sel = LexicaseSelection()
+    selected = sel.select(pop, k=20)
+    for s in selected:
+        assert s in pop
+
+
+def test_lexicase_epsilon_selects_broader_pool():
+    pop = _make_pop_with_case_errors(20, 50)
+    sel_strict = LexicaseSelection(epsilon=0.0)
+    sel_eps = LexicaseSelection(epsilon=0.1)
+    assert len(sel_strict.select(pop, k=5)) == 5
+    assert len(sel_eps.select(pop, k=5)) == 5
+
+
+def test_lexicase_fallback_without_case_errors():
+    pop = make_pop([0.5, 0.3, 0.8, 0.1])  # FakeInd without _case_errors
+    sel = LexicaseSelection()
+    selected = sel.select(pop, k=2, fitness_attr="fitness_value")
+    assert len(selected) == 2
+
+
+def test_population_stores_case_errors():
+    import numpy as np
+    from symgene import PrimitiveSet, Population
+    from symgene.primitives import STANDARD
+    pset = PrimitiveSet(n_inputs=2)
+    pset.add_from_catalog(STANDARD)
+    pop = Population("p", pset, n_genes=2, pop_size=8, n_genes_max=4)
+    pop.initialize(seed=0)
+    X = np.random.rand(30, 2)
+    y = np.random.rand(30)
+    pop.evaluate(X, y)
+    found = False
+    for ind in pop._population:
+        if hasattr(ind, "_case_errors") and ind._case_errors is not None:
+            assert len(ind._case_errors) == 30
+            found = True
+    assert found
+
+from symgene.selection.lexicase import LexicaseSelection
+
+
+def _make_pop_with_case_errors(n_inds=10, n_cases=20):
+    rng = np.random.default_rng(7)
+
+    class IndWithErrors:
+        def __init__(self, errors, fitness_value):
+            self._case_errors = errors
+            self.fitness_value = fitness_value
+
+    return [
+        IndWithErrors(rng.uniform(0, 1, n_cases), rng.uniform(0, 1))
+        for _ in range(n_inds)
+    ]
+
+
+def test_lexicase_returns_k():
+    pop = _make_pop_with_case_errors(10, 20)
+    sel = LexicaseSelection()
+    selected = sel.select(pop, k=5)
+    assert len(selected) == 5
+
+
+def test_lexicase_all_selected_from_pool():
+    pop = _make_pop_with_case_errors(8, 15)
+    sel = LexicaseSelection()
+    selected = sel.select(pop, k=20)
+    for s in selected:
+        assert s in pop
+
+
+def test_lexicase_epsilon_no_error():
+    pop = _make_pop_with_case_errors(20, 50)
+    sel_strict = LexicaseSelection(epsilon=0.0)
+    sel_eps = LexicaseSelection(epsilon=0.1)
+    assert len(sel_strict.select(pop, k=5)) == 5
+    assert len(sel_eps.select(pop, k=5)) == 5
+
+
+def test_lexicase_fallback_without_case_errors():
+    pop = make_pop([0.5, 0.3, 0.8, 0.1])
+    sel = LexicaseSelection()
+    selected = sel.select(pop, k=2, fitness_attr="fitness_value")
+    assert len(selected) == 2
+
+
+def test_population_stores_case_errors():
+    import numpy as np
+    from symgene import PrimitiveSet, Population
+    from symgene.primitives import STANDARD
+    pset = PrimitiveSet(n_inputs=2)
+    pset.add_from_catalog(STANDARD)
+    pop = Population("p", pset, n_genes=2, pop_size=8, n_genes_max=4)
+    pop.initialize(seed=0)
+    X = np.random.rand(30, 2)
+    y = np.random.rand(30)
+    pop.evaluate(X, y)
+    found = False
+    for ind in pop._population:
+        if hasattr(ind, "_case_errors") and ind._case_errors is not None:
+            assert len(ind._case_errors) == 30
+            found = True
+    assert found

@@ -140,6 +140,7 @@ class Population:
             combiner = _get_combiner(self.combiner_name, **combiner_kwargs)
             combiner.fit(G, y)
             y_pred = combiner.predict(G)
+            ind._case_errors = np.abs(y - y_pred)
 
             fitness_val = self.fitness.compute(ind, X, y, y_pred)
             ind.fitness.values = (fitness_val,)
