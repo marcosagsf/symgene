@@ -88,3 +88,25 @@ def test_evolver_logs_contain_population_metrics():
     assert cb.last_logs is not None
     assert "gen" in cb.last_logs
     assert "myp_train_mse" in cb.last_logs
+
+
+def test_evolver_stops_on_early_stopping_signal():
+    """When a callback returns True from on_generation_end, evolution stops early."""
+    class StopAtGen2(Callback):
+        def on_generation_end(self, gen, logs=None):
+            return True if gen >= 2 else None
+
+    import numpy as np
+    from symgene import PrimitiveSet, Population, SymGeneEvolver
+    from symgene.primitives import STANDARD
+    pset = PrimitiveSet(n_inputs=2)
+    pset.add_from_catalog(STANDARD)
+    pop = Population("p", pset, n_genes=2, pop_size=10, n_genes_max=4)
+    cb = StopAtGen2()
+    evolver = SymGeneEvolver(populations=[pop], n_gen=20, callbacks=[cb], verbose=0)
+    X = np.random.rand(20, 2)
+    y = np.random.rand(20)
+    results = evolver.fit(X, {"p": y})
+    # If early stopping worked, history should have at most 3 entries (gen 0,1,2)
+    history = results["p"].history_
+    assert len(history) <= 3
