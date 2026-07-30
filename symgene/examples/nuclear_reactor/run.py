@@ -1,7 +1,15 @@
 """
 Nuclear Reactor MGGP Demo — SymGene
-Mimics the Angra II reactor methodology: two populations (CBORON + PPF)
-with 108 synthetic inputs (36 k-inf + 36 LEX + 36 cluster).
+Demonstra o uso avançado com duas populações simultâneas (CBORON + PPF),
+inputs sintéticos de 108 variáveis (36 k-inf + 36 LEX + 36 cluster)
+e primitiva física customizada.
+
+Parâmetros demonstrados:
+  n_genes_max   — número máximo de genes por indivíduo (cap dinâmico)
+  elite_ratio   — fração da população preservada intacta a cada geração
+  cxpb_inter    — probabilidade de crossover entre populações diferentes
+  cross_population — ativa o intercâmbio de genes entre populações
+
 Run: python -m symgene.examples.nuclear_reactor.run
 """
 import numpy as np
@@ -11,6 +19,7 @@ from symgene.primitives import STANDARD
 from symgene.fitness import FitnessEvaluator
 from symgene.metrics.regression import mse
 from symgene.metrics.complexity import complexity_penalty, missing_vars_penalty
+from symgene.metrics import nrmse
 from symgene.selection import TournamentSelection
 from symgene.callbacks import EarlyStopping, GenerationLogger
 
@@ -41,6 +50,7 @@ def make_pset():
     pset.add_from_catalog(STANDARD)
     pset.set_squash(lim=8, alpha=0.1, scale=2.0)
 
+    # primitiva física customizada: desvio local de um nó em relação à média dos vizinhos
     def local_peak(center, n1, n2, n3, n4):
         return center - (n1 + n2 + n3 + n4) / 4.0
 
@@ -56,7 +66,9 @@ def main():
         name="cboron",
         pset=pset,
         n_genes=4,
+        n_genes_max=12,     # permite crescer até 12 genes (add mutation pode expandir)
         pop_size=30,
+        elite_ratio=0.05,   # 5% da população é preservada intacta (elitismo)
         fitness=FitnessEvaluator(
             metric=mse,
             penalties=[
@@ -73,7 +85,9 @@ def main():
         name="ppf",
         pset=pset,
         n_genes=4,
+        n_genes_max=10,     # PPF pode crescer até 10 genes
         pop_size=30,
+        elite_ratio=0.05,
         fitness=FitnessEvaluator(metric=mse, penalties=[complexity_penalty(lambda_=3e-4)]),
         selection=TournamentSelection(size=5),
     )
@@ -81,8 +95,8 @@ def main():
     evolver = SymGeneEvolver(
         populations=[pop_cboron, pop_ppf],
         n_gen=15,
-        cross_population=True,
-        cxpb_inter=0.025,
+        cross_population=True,   # ativa intercâmbio de genes entre populações
+        cxpb_inter=0.025,        # 2.5% de chance de crossover inter-populacional por geração
         seed=0,
         callbacks=[
             GenerationLogger(every=5),
@@ -98,11 +112,13 @@ def main():
         y_val={"cboron": y_cb_te, "ppf": y_ppf_te},
     )
 
-    for pop_name in ("cboron", "ppf"):
+    for pop_name, y_te in [("cboron", y_cb_te), ("ppf", y_ppf_te)]:
         res = results[pop_name]
+        y_pred = res.predict(X_te)
         print(f"\n=== {pop_name.upper()} ===")
         print(f"  Genes  : {res.n_genes_}")
         print(f"  Fitness: {res.best_fitness_:.6f}")
+        print(f"  NRMSE  : {nrmse(y_te, y_pred):.4f}")
 
     print("\nDone. To export: results['cboron'].to_latex()")
 
