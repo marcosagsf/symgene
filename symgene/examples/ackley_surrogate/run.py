@@ -1,21 +1,21 @@
 """
 Ackley 2D — MGGP Surrogate + PSO Demo
 
-Pipeline completo de otimização assistida por surrogate:
-  1. SymGeneSurrogate amostra a função Ackley com 300 pontos LHS
-  2. Ajusta um surrogate MGGP sobre os pontos amostrados
-  3. PSO minimiza na superfície do surrogate
-  4. Reporta o valor real da função no melhor ponto encontrado
+Complete surrogate-assisted optimization pipeline:
+  1. SymGeneSurrogate samples the Ackley function with 300 LHS points
+  2. Fits an MGGP surrogate on the sampled points
+  3. PSO minimizes on the surrogate surface
+  4. Reports the true function value at the best point found
 
-Parâmetros demonstrados:
-  combiner          — combinador linear dos genes: 'ridge', 'lasso' ou 'linear'
-  ridge_alphas      — lista de alphas candidatos para regularização Ridge (escolhido por CV)
-  regression_degree — grau do modelo de regressão sobre os genes (1=linear, 2=quadrático)
-  selection         — operador de seleção configurável (aqui: TournamentSelection)
-  mutpb             — probabilidade de mutação ocorrer por indivíduo por geração
-  mutpb_low         — fração low-order (subtree) vs high-order (add/remove/replace de gene)
-  mutation_weights  — pesos de [remove, add, replace] na mutação high-order
-                      ex: [0.5, 1.5, 1.0] → favorece adicionar genes
+Demonstrated parameters:
+  combiner          — linear combiner of genes: 'ridge', 'lasso' or 'linear'
+  ridge_alphas      — list of candidate alphas for Ridge regularization (chosen by CV)
+  regression_degree — degree of the regression model over genes (1=linear, 2=quadratic)
+  selection         — configurable selection operator (here: TournamentSelection)
+  mutpb             — probability of mutation occurring per individual per generation
+  mutpb_low         — fraction low-order (subtree) vs high-order (add/remove/replace gene)
+  mutation_weights  — weights of [remove, add, replace] in high-order mutation
+                      e.g.: [0.5, 1.5, 1.0] → favors adding genes
 
 Run: python -m symgene.examples.ackley_surrogate.run
 """
@@ -42,15 +42,15 @@ def main():
         feature_names=["x1", "x2"],
         seed=0,
         verbose=0,
-        # --- combinador e regularização ---
-        combiner="ridge",                              # Ridge regulariza os pesos dos genes
-        ridge_alphas=[0.01, 0.1, 1.0, 10.0, 100.0],  # alphas candidatos (melhor escolhido por CV)
-        regression_degree=1,                           # combinação linear dos genes (grau 1)
-        # --- seleção ---
-        selection=TournamentSelection(size=7),         # torneio de tamanho 7
-        # --- mutação ---
-        mutpb=0.25,                        # 25% de chance de mutação por indivíduo por geração
-        mutpb_low=0.30,                    # 30% subtree (low), 70% estrutural (high)
+        # --- combiner and regularization ---
+        combiner="ridge",                              # Ridge regularizes gene weights
+        ridge_alphas=[0.01, 0.1, 1.0, 10.0, 100.0],  # candidate alphas (best chosen by CV)
+        regression_degree=1,                           # linear combination of genes (degree 1)
+        # --- selection ---
+        selection=TournamentSelection(size=7),         # tournament of size 7
+        # --- mutation ---
+        mutpb=0.25,                        # 25% chance of mutation per individual per generation
+        mutpb_low=0.30,                    # 30% subtree (low), 70% structural (high)
         mutation_weights=[0.5, 1.5, 1.0],  # high-order: remove=0.5, add=1.5, replace=1.0
     )
 
@@ -59,14 +59,14 @@ def main():
     surrogate = SymGeneSurrogate(
         regressor=regressor,
         optimizer=optimizer,
-        n_samples=300,   # função analítica — amostrar generosamente
+        n_samples=300,   # analytic function — sample generously
         maximize=False,
         seed=0,
     )
 
     result = surrogate.optimize(bench.fn, bounds=bench.bounds)
 
-    # avalia qualidade do surrogate em pontos de validação independentes
+    # evaluate surrogate quality on independent validation points
     rng = np.random.default_rng(1)
     X_val = rng.uniform(-5, 5, (200, 2))
     y_val  = np.array([bench.fn(X_val[i]) for i in range(200)])
