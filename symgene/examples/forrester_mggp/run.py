@@ -14,18 +14,18 @@ def main():
     bench = forrester_1d()
     rng = np.random.default_rng(0)
 
-    # Training: 20 points in [0, 1]
-    X_train = np.sort(rng.uniform(0, 1, (20, 1)), axis=0)
-    y_train = np.array([bench.fn(X_train[i]) for i in range(20)])
+    # Training: 200 uniform points in [0, 1] — function is known analytically
+    X_train = np.sort(rng.uniform(0, 1, (200, 1)), axis=0)
+    y_train = np.array([bench.fn(X_train[i]) for i in range(200)])
 
-    # Test: 50 points
-    X_test = np.linspace(0, 1, 50).reshape(-1, 1)
-    y_test = np.array([bench.fn(X_test[i]) for i in range(50)])
+    # Test: 500 evenly spaced points
+    X_test = np.linspace(0, 1, 500).reshape(-1, 1)
+    y_test = np.array([bench.fn(X_test[i]) for i in range(500)])
 
     model = SymGeneRegressor(
-        n_genes=3,
-        pop_size=40,
-        n_gen=30,
+        n_genes=4,
+        pop_size=60,
+        n_gen=80,
         primitives=STANDARD,
         squash={"lim": 8, "alpha": 0.1, "scale": 2.0},
         feature_names=["x"],
