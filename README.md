@@ -223,7 +223,7 @@ If you use SymGene in your research, please cite:
 @article{symgene2026,
   title   = {SymGene: A Multi-Gene Genetic Programming Library for Symbolic Regression
              and Surrogate-Assisted Optimization},
-  author  = {Filho, Marcos},
+  author  = {Filho, Marcos A. G. S.},
   journal = {SoftwareX},
   year    = {2026},
 }
