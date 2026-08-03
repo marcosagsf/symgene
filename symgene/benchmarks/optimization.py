@@ -64,6 +64,29 @@ def himmelblau_2d() -> OptimBenchmark:
     )
 
 
+def schwefel_2d() -> OptimBenchmark:
+    """
+    Schwefel function (2D).
+    f(x, y) = 418.9829*2 - x*sin(sqrt(|x|)) - y*sin(sqrt(|y|))
+    Global minimum at (420.9687, 420.9687), f ≈ 0.
+    Highly multimodal — many deceptive local minima far from the global optimum.
+    Domain: x, y in [-500, 500]
+    """
+    def fn(x: np.ndarray) -> float:
+        return float(418.9829 * 2 - x[0] * np.sin(np.sqrt(abs(x[0])))
+                     - x[1] * np.sin(np.sqrt(abs(x[1]))))
+
+    return OptimBenchmark(
+        fn=fn,
+        bounds=[(-500.0, 500.0), (-500.0, 500.0)],
+        x_opt=np.array([420.9687, 420.9687]),
+        f_opt=0.0,
+        name="Schwefel2D",
+        formula="418.9829*2 - x*sin(sqrt(|x|)) - y*sin(sqrt(|y|))",
+        n_inputs=2,
+    )
+
+
 def ackley_2d() -> OptimBenchmark:
     """
     Ackley function (2D).

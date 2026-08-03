@@ -4,6 +4,7 @@ from typing import Callable
 import deap.gp as gp
 from symgene.primitives.squash import Squash
 from symgene.primitives.catalog import get_catalog, STANDARD
+from symgene.primitives.sympy_map import CATALOG_SYMPY
 
 class PrimitiveSet:
     def __init__(
@@ -21,7 +22,7 @@ class PrimitiveSet:
         else:
             self.feature_names = [f"x{i+1}" for i in range(n_inputs)]
 
-        self.primitives: list[tuple] = []   # (fn, arity, name)
+        self.primitives: list[tuple] = []   # (fn, arity, name, sympy_fn | None)
         self.ephemerals: list[dict] = []
         self.squash: Squash | None = None
         self._custom: list[tuple] = []
@@ -33,12 +34,32 @@ class PrimitiveSet:
         import inspect
         for name, fn in fns.items():
             arity = len(inspect.signature(fn).parameters)
-            self.primitives.append((fn, arity, name))
+            sympy_fn = CATALOG_SYMPY.get(name)
+            self.primitives.append((fn, arity, name, sympy_fn))
         return self
 
-    def add_custom(self, fn: Callable, arity: int, name: str) -> "PrimitiveSet":
-        self.primitives.append((fn, arity, name))
+    def add_custom(
+        self,
+        fn: Callable,
+        arity: int,
+        name: str,
+        sympy_fn: Callable | None = None,
+    ) -> "PrimitiveSet":
+        """Register a custom primitive.
+
+        Parameters
+        ----------
+        sympy_fn:
+            Lambda recebendo argumentos sympy e retornando uma expressão sympy.
+            Necessário para que to_sympy() / to_latex() funcionem com esta primitiva.
+            Se None, to_sympy() emitirá UserWarning ao encontrar esta primitiva.
+        """
+        self.primitives.append((fn, arity, name, sympy_fn))
         return self
+
+    def sympy_registry(self) -> dict:
+        """Retorna {name: sympy_fn} para todas as primitivas registradas."""
+        return {name: sfn for _, _, name, sfn in self.primitives}
 
     def add_ephemeral(
         self, name: str, dist: str = "uniform",
@@ -75,7 +96,7 @@ class PrimitiveSet:
         deap_pset.renameArguments(**rename)
 
         # add primitives
-        for fn, arity, name in self.primitives:
+        for fn, arity, name, *_ in self.primitives:
             deap_pset.addPrimitive(fn, arity, name=name)
 
         # add ephemerals

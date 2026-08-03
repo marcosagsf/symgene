@@ -5,8 +5,34 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "symgene"
 version = "0.1.0"
-description = "Multi-gene symbolic regression with multi-population co-evolution"
+description = "Multi-Gene Genetic Programming library for symbolic regression and surrogate-assisted optimization"
+readme = "README.md"
 requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Marcos Filho", email = "marcosagsf@gmail.com"},
+]
+keywords = [
+    "genetic programming",
+    "symbolic regression",
+    "surrogate optimization",
+    "evolutionary computation",
+    "multi-gene",
+    "PSO",
+    "machine learning",
+    "interpretable models",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
 dependencies = [
     "deap>=1.4",
     "numpy>=1.24",
@@ -19,6 +45,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7.4", "pytest-cov"]
+
+[project.urls]
+Repository = "https://github.com/marcosagsf/symgene"
+Issues = "https://github.com/marcosagsf/symgene/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

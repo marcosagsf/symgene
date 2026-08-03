@@ -1,6 +1,11 @@
 import numpy as np
 
 
+def _scalar(val) -> float:
+    """Extract a float from either a DEAP Fitness object or a plain scalar."""
+    return float(val.values[0]) if hasattr(val, 'values') else float(val)
+
+
 class RankSelection:
     def __init__(self, pressure: float = 1.5):
         self.pressure = pressure  # 1.0 (uniform) to 2.0 (max bias)
@@ -13,7 +18,7 @@ class RankSelection:
         minimize: bool = True,
     ) -> list:
         n = len(population)
-        fitnesses = [getattr(ind, fitness_attr) for ind in population]
+        fitnesses = [_scalar(getattr(ind, fitness_attr)) for ind in population]
         ranked_indices = sorted(range(n), key=lambda i: fitnesses[i], reverse=not minimize)
         ranks = np.zeros(n)
         for rank_pos, orig_idx in enumerate(ranked_indices):

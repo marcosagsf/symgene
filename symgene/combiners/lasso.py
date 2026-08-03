@@ -1,26 +1,35 @@
 import numpy as np
 from sklearn.linear_model import LassoCV
-from sklearn.preprocessing import PolynomialFeatures
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from symgene.combiners.base import BaseCombiner
 
 class LassoCombiner(BaseCombiner):
     def __init__(self, alphas: list[float] | None = None, degree: int = 1):
-        self.alphas = alphas if alphas is not None else [0.01, 0.1, 1.0]
+        self.alphas = alphas if alphas is not None else [0.001, 0.01, 0.1, 1.0, 10.0]
         self.degree = degree
         self._poly: PolynomialFeatures | None = None
+        self._scaler: StandardScaler | None = None
         self._model: LassoCV | None = None
 
     def _featurize(self, G: np.ndarray, fit: bool = False) -> np.ndarray:
         if self.degree > 1:
             if fit:
                 self._poly = PolynomialFeatures(degree=self.degree, include_bias=False)
-                return self._poly.fit_transform(G)
-            return self._poly.transform(G)
-        return G
+                F = self._poly.fit_transform(G)
+            else:
+                F = self._poly.transform(G)
+        else:
+            F = G
+        if fit:
+            self._scaler = StandardScaler()
+            return self._scaler.fit_transform(F)
+        if self._scaler is not None:
+            return self._scaler.transform(F)
+        return F
 
     def fit(self, G: np.ndarray, y: np.ndarray) -> "LassoCombiner":
         features = self._featurize(G, fit=True)
-        self._model = LassoCV(alphas=self.alphas, cv=5, max_iter=5000)
+        self._model = LassoCV(alphas=self.alphas, cv=5, max_iter=100000, tol=1e-3)
         self._model.fit(features, y)
         self.coef_ = self._model.coef_.flatten()
         self.bias_ = float(self._model.intercept_)

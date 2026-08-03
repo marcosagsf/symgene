@@ -106,9 +106,16 @@ class SymGeneEvolver:
 
                 for pop in self.populations:
                     best = pop.best
+                    valid_fits = [
+                        ind.fitness.values[0]
+                        for ind in pop._population
+                        if ind.fitness.valid and ind.fitness.values[0] < 1e6
+                    ]
                     entry = {
                         "gen": gen,
                         "train_mse": best.fitness.values[0] if best else 1e9,
+                        "mean_train_mse": float(np.mean(valid_fits)) if valid_fits else 1e9,
+                        "std_train_mse": float(np.std(valid_fits)) if valid_fits else 0.0,
                         "n_genes": len(best) if best else 0,
                     }
                     if X_val is not None and y_val is not None:
@@ -188,10 +195,11 @@ class SymGeneEvolver:
         ]
         for popA, popB in pairs:
             n_events = max(1, int(len(popA._population) * self.cxpb_inter))
-            n_non_elite = len(popA._population) - popA.n_elite
+            n_non_elite_A = len(popA._population) - popA.n_elite
+            n_non_elite_B = len(popB._population) - popB.n_elite
             for _ in range(n_events):
-                a = random.randint(0, n_non_elite - 1)
-                b = random.randint(0, n_non_elite - 1)
+                a = random.randint(0, n_non_elite_A - 1)
+                b = random.randint(0, n_non_elite_B - 1)
                 popA._population[a], popB._population[b], *_ = interpop_crossover(
                     popA._population[a], popB._population[b],
                     popA._toolbox, cxpb_low_inter=0.3, tree_max=popA.tree_max,
@@ -204,6 +212,8 @@ class SymGeneEvolver:
             import deap.gp as gp
             funcs = [gp.compile(gene, pop._deap_pset) for gene in ind]
             G = np.column_stack([[f(*row) for row in X] for f in funcs])
+            if not np.all(np.isfinite(G)):
+                G = np.nan_to_num(G, nan=0.0, posinf=0.0, neginf=0.0)
             return ind._combiner.predict(G)
         except Exception:
             return None

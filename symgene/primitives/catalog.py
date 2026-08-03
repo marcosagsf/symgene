@@ -18,6 +18,8 @@ def _build_all(squash: Squash) -> dict:
         registry.update(factory(squash))
     return registry
 
+ARITHMETIC = ["add", "sub", "mul", "div"]
+
 STANDARD = [
     "add", "sub", "mul", "div", "abs",
     "square", "cube", "sqrt", "inv",

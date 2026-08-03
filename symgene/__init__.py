@@ -1,3 +1,5 @@
+__version__ = "0.1.0"
+
 from symgene.primitive_set import PrimitiveSet
 from symgene.population import Population
 from symgene.evolver import SymGeneEvolver

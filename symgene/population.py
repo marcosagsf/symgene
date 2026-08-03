@@ -43,6 +43,7 @@ class Population:
         tree_min: int = 50,
         tree_max: int = 80,
         height_max: int = 8,
+        tree_init_max: int | None = None,
         combiner: str = "ridge",
         ridge_alphas: list[float] | None = None,
         regression_degree: int = 1,
@@ -64,6 +65,7 @@ class Population:
         self.tree_min = tree_min
         self.tree_max = tree_max
         self.height_max = height_max
+        self.tree_init_max = tree_init_max if tree_init_max is not None else height_max
         self.combiner_name = combiner
         self.ridge_alphas = ridge_alphas or [1.0, 5.0, 10.0]
         self.regression_degree = regression_degree
@@ -96,6 +98,13 @@ class Population:
 
         def gen_tree():
             return creator.SGGene(
+                gp.genHalfAndHalf(self._deap_pset, min_=2, max_=self.tree_init_max)
+            )
+
+        def gen_tree_mut():
+            # Genes added/replaced during mutation use height_max, not tree_init_max,
+            # so evolution can explore deeper structures than the initial population.
+            return creator.SGGene(
                 gp.genHalfAndHalf(self._deap_pset, min_=2, max_=self.height_max)
             )
 
@@ -103,11 +112,13 @@ class Population:
             return creator.SGIndividual(gen_tree() for _ in range(self.n_genes))
 
         self._toolbox.register("gene", gen_tree)
+        self._toolbox.register("gene_mut", gen_tree_mut)
         self._toolbox.register("individual", gen_individual)
         self._toolbox.register("mate", gp.cxOnePoint)
+        mut_height = max(3, self.height_max // 2)
         self._toolbox.register(
             "expr_mut", gp.genHalfAndHalf,
-            pset=self._deap_pset, min_=1, max_=3
+            pset=self._deap_pset, min_=1, max_=mut_height
         )
         self._toolbox.register(
             "mutate", gp.mutUniform,

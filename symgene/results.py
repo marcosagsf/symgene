@@ -48,16 +48,51 @@ class PopulationResult:
 
     def to_sympy(self):
         try:
-            import sympy
+            import sympy as sp
+            import deap.gp as gp
+            import warnings
+
             ind = self.best_individual_
+            if ind is None:
+                return []
+
+            registry = self._pop.pset.sympy_registry()
+            feature_names = self._pop.pset.feature_names
+            sym_vars = {name: sp.Symbol(name) for name in feature_names}
+
+            def _eval(nodes, idx):
+                node = nodes[idx]
+                if isinstance(node, gp.Primitive):
+                    sfn = registry.get(node.name)
+                    args = []
+                    next_idx = idx + 1
+                    for _ in range(node.arity):
+                        arg, next_idx = _eval(nodes, next_idx)
+                        args.append(arg)
+                    if sfn is None:
+                        warnings.warn(
+                            f"Primitiva '{node.name}' não possui sympy_fn. "
+                            "Forneça sympy_fn em add_custom() para habilitar to_sympy().",
+                            UserWarning,
+                            stacklevel=4,
+                        )
+                        return None, next_idx
+                    if any(a is None for a in args):
+                        return None, next_idx
+                    return sfn(*args), next_idx
+                else:
+                    name = node.name
+                    if name in sym_vars:
+                        return sym_vars[name], idx + 1
+                    try:
+                        return sp.Float(float(node.value)), idx + 1
+                    except (TypeError, ValueError, AttributeError):
+                        return sp.Symbol(str(name)), idx + 1
+
             exprs = []
             for gene in ind:
-                expr_str = str(gene)
-                for i, name in enumerate(self._pop.pset.feature_names):
-                    expr_str = expr_str.replace(name, f"var_{i}")
-                sym_vars = {f"var_{i}": sympy.Symbol(name)
-                            for i, name in enumerate(self._pop.pset.feature_names)}
-                exprs.append(sympy.sympify(expr_str, locals=sym_vars))
+                expr, _ = _eval(list(gene), 0)
+                exprs.append(expr)
             return exprs
         except Exception as e:
             return str(e)
@@ -67,7 +102,8 @@ class PopulationResult:
             import sympy
             exprs = self.to_sympy()
             if isinstance(exprs, list):
-                return " + ".join(sympy.latex(e) for e in exprs)
+                parts = [sympy.latex(e) for e in exprs if e is not None]
+                return " + ".join(parts) if parts else ""
             return str(exprs)
         except Exception:
             return self.best_expression_
