@@ -24,11 +24,11 @@ SymGene is an open-source Python library for multi-gene genetic programming (MGG
 applied to symbolic regression and surrogate-assisted optimization. MGGP represents
 each model as a weighted linear combination of evolved tree-based expressions, called
 genes, fitted by ridge or lasso regression. This structure produces interpretable,
-closed-form models that can be exported as SymPy expressions, LaTeX strings, or
+closed-form models that can be exported as SymPy [@meurer2017] expressions, LaTeX strings, or
 standalone Python callables requiring no library dependency at evaluation time.
 
 The library provides two interfaces: a high-level `SymGeneRegressor` following
-scikit-learn conventions, and a low-level `SymGeneEvolver` supporting simultaneous
+scikit-learn [@pedregosa2011] conventions, and a low-level `SymGeneEvolver` supporting simultaneous
 multi-population co-evolution. Each population can be configured with independent
 selection strategies, fitness evaluators, primitive sets, and adaptive parameter
 schedules. An integrated Particle Swarm Optimizer (PSO) enables surrogate-assisted
