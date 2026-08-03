@@ -9,7 +9,7 @@ tags:
   - evolutionary computation
 authors:
   - name: Marcos A.G.S. Filho
-    orcid: 0000-0000-0000-0000
+    orcid: 0009-0002-8510-9509
     affiliation: 1
 affiliations:
   - name: Department of Nuclear Engineering, Federal University of Rio de Janeiro (UFRJ), Brazil
@@ -149,6 +149,8 @@ content, results, and design decisions were reviewed and validated by the author
 
 # Acknowledgements
 
-[To be completed by the author]
+M.A.G.S. Filho acknowledges financial support from the Carlos Chagas Filho Foundation
+for Research Support of the State of Rio de Janeiro (FAPERJ) through a graduate 
+scholarship.
 
 # References
