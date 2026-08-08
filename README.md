@@ -1,5 +1,7 @@
 # SymGene
 
+[![Tests](https://github.com/marcosagsf/symgene/actions/workflows/tests.yml/badge.svg)](https://github.com/marcosagsf/symgene/actions/workflows/tests.yml)
+
 **Multi-Gene Genetic Programming (MGGP) library for symbolic regression and surrogate-assisted optimization.**
 
 SymGene provides a modular, extensible framework for evolving interpretable closed-form mathematical expressions from data. Built on [DEAP](https://deap.readthedocs.io/), it supports multi-population co-evolution, surrogate-assisted black-box optimization with Particle Swarm Optimization (PSO), and full symbolic export via [SymPy](https://www.sympy.org/).
