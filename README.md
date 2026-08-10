@@ -218,6 +218,9 @@ Rich visualisations and full execution outputs are available in the companion `n
 | `03_surrogate_ackley.py` | Ackley 2D | Surrogate + PSO, `combiner="ridge"`, `TournamentSelection` |
 | `04_mggp_nguyen10_doublewell.py` | Nguyen-10 + Double Well | `RankSelection`, `missing_vars_penalty`, `schedule`, `EarlyStopping` |
 | `05_schwefel_custom_pset.py` | Schwefel 2D | `ARITHMETIC` preset, `add_custom` + `sympy_fn`, `to_latex()`, `to_callable()` |
+| `06_llm_primitive_selection.py` *(requires `[llm]`)* | Nguyen-10 | `PrimitiveSet.from_description()`, `InsufficientContextError`, LLM vs STANDARD pset comparison |
+| `07_llm_interpret_and_concepts.py` *(requires `[llm]`)* | Forrester 1D | `LLMContext.from_result()`, `ctx.evolve()`, `PopulationResult.interpret()` |
+| `08_llm_genetic_rescue.py` *(requires `[llm]`)* | Dittus-Boelter (heat transfer) | Full LLM pipeline: Phase 1 + Genetic Rescue + Phase 2 |
 
 Run any example after installation:
 

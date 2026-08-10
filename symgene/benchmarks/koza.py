@@ -11,6 +11,7 @@ class BenchmarkData(NamedTuple):
     name: str
     n_inputs: int
     formula: str
+    feature_names: list[str] | None = None
 
 
 def _make_1d(fn, lo: float, hi: float, n_train: int, n_test: int, seed: int):

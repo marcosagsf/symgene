@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Dittus-Boelter heat transfer benchmark**
+- `dittus_boelter()` — symbolic regression benchmark for the convective heat transfer correlation `Nu = 0.023·Re^0.8·Pr^0.4`; log-uniform LHS sampling over Re ∈ [10⁴, 10⁶] and Pr ∈ [0.7, 160]; returns `BenchmarkData` with `feature_names=["Re", "Pr"]`
+- `BenchmarkData` NamedTuple extended with optional `feature_names` field (backward-compatible default `None`)
+- 10 new tests in `tests/benchmarks/test_heat_transfer.py`
+
+**LLM example scripts** *(require `pip install symgene[llm]` + API key)*
+- `examples/06_llm_primitive_selection.py` — Phase 1: compares LLM-selected vs STANDARD primitive set on Nguyen-10; demonstrates `PrimitiveSet.from_description()` and `InsufficientContextError`
+- `examples/07_llm_interpret_and_concepts.py` — Phase 2: fits Forrester 1D then builds and evolves a concept library with `LLMContext`; interprets the best expression with `PopulationResult.interpret()`
+- `examples/08_llm_genetic_rescue.py` — Full pipeline (Phases 1+2+3): primitive selection → Genetic Rescue during training → concept extraction → physical interpretation, all on the Dittus-Boelter benchmark
+
 ---
 
 ## [0.2.0] — 2026-08-10
