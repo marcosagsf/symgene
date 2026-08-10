@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "symgene"
-version = "0.1.0"
-description = "Multi-Gene Genetic Programming library for symbolic regression and surrogate-assisted optimization"
+version = "0.2.0"
+description = "Multi-Gene Genetic Programming library for symbolic regression, surrogate-assisted optimization, and LLM-guided evolution"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}

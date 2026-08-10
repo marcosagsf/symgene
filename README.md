@@ -2,9 +2,9 @@
 
 [![Tests](https://github.com/marcosagsf/symgene/actions/workflows/tests.yml/badge.svg)](https://github.com/marcosagsf/symgene/actions/workflows/tests.yml)
 
-**Multi-Gene Genetic Programming (MGGP) library for symbolic regression and surrogate-assisted optimization.**
+**Multi-Gene Genetic Programming (MGGP) library for symbolic regression, surrogate-assisted optimization, and LLM-guided evolution.**
 
-SymGene provides a modular, extensible framework for evolving interpretable closed-form mathematical expressions from data. Built on [DEAP](https://deap.readthedocs.io/), it supports multi-population co-evolution, surrogate-assisted black-box optimization with Particle Swarm Optimization (PSO), and full symbolic export via [SymPy](https://www.sympy.org/).
+SymGene provides a modular, extensible framework for evolving interpretable closed-form mathematical expressions from data. Built on [DEAP](https://deap.readthedocs.io/), it supports multi-population co-evolution, surrogate-assisted black-box optimization with Particle Swarm Optimization (PSO), full symbolic export via [SymPy](https://www.sympy.org/), and optional LLM assistance for primitive selection, expression interpretation, and Genetic Rescue inside the evolutionary loop.
 
 ---
 
@@ -20,6 +20,7 @@ SymGene provides a modular, extensible framework for evolving interpretable clos
 - **Combiners** — Ridge, Lasso, and Linear regression of gene outputs, with polynomial degree support
 - **Selection strategies** — Tournament, Rank, Roulette, Lexicase, and Gene-level selection
 - **Benchmark suite** — Koza (3), Nguyen (10), and optimization benchmarks (Forrester, Himmelblau, Ackley, Schwefel)
+- **LLM assistance** *(optional)* — primitive selection from domain description, expression interpretation, and Genetic Rescue inside the evolutionary loop
 
 ---
 
@@ -27,6 +28,12 @@ SymGene provides a modular, extensible framework for evolving interpretable clos
 
 ```bash
 pip install symgene
+```
+
+To enable LLM features (Anthropic and/or OpenAI):
+
+```bash
+pip install symgene[llm]
 ```
 
 To install from source:
@@ -142,6 +149,61 @@ print(regressor.to_latex())     # renders custom primitive in LaTeX
 fn = regressor.to_callable()    # standalone Python function, no MGGP dependency
 ```
 
+### LLM-assisted evolution
+
+Requires `pip install symgene[llm]` and an Anthropic or OpenAI API key.
+
+**Phase 1 — LLM selects primitives from a domain description:**
+
+```python
+from symgene.llm import LLMClient, InsufficientContextError
+
+client = LLMClient(provider="anthropic", model="claude-haiku-4-5-20251001")
+
+try:
+    pset = PrimitiveSet.from_description(
+        description="axial power distribution in a PWR with burnup and enrichment gradients",
+        client=client,
+        n_inputs=3,
+        feature_names=["burnup", "enrichment", "boron"],
+    )
+except InsufficientContextError as e:
+    print(e.llm_message)   # LLM asks for more context
+```
+
+**Phase 2 — LLM interprets the evolved expression:**
+
+```python
+from symgene.llm import LLMContext
+
+result = evolver.fit(X, {"PPF": y_ppf})
+print(result["PPF"].interpret(client, description="peak power factor in a PWR"))
+
+# Build a concept library from the run
+ctx = LLMContext.from_result(result["PPF"], client, description="PWR power distribution")
+ctx.evolve(client, n_concepts=3)
+print(ctx.concepts)
+```
+
+**Phase 3 — Genetic Rescue inside the evolutionary loop:**
+
+```python
+evolver = SymGeneEvolver(
+    populations=[pop],
+    n_gen=300,
+    llm_rescue=True,
+    llm_client=client,
+    llm_context={"PPF": ctx},
+    llm_rescue_trigger="stagnation",   # fires when best fitness stops improving
+    llm_rescue_level="gene",           # replace one gene per rescued individual
+    llm_rescue_fraction=0.1,           # rescue worst 10% of population
+    llm_stagnation_patience=20,
+)
+result = evolver.fit(X, {"PPF": y_ppf})
+```
+
+If the LLM API becomes unreachable, a warning is printed and evolution continues normally without LLM assistance.
+
 ---
 
 ## Examples
@@ -173,11 +235,24 @@ python examples/01_mggp_forrester_koza.py
 | `SymGeneEvolver` | Low-level driver for multi-population co-evolution |
 | `Population` | Encapsulates one population: genes, operators, fitness, selection |
 | `PrimitiveSet` | Manages mathematical primitives and terminal nodes |
+| `PrimitiveSet.from_description()` | Build a primitive set from a domain description via LLM *(requires `[llm]`)* |
 | `FitnessEvaluator` | Combines a metric with optional complexity/diversity penalties |
 | `PSOOptimizer` | Particle Swarm Optimizer for black-box minimization |
-| `SymGeneResult` | Fitted model: `predict()`, `to_sympy()`, `to_latex()`, `to_callable()` |
+| `SymGeneResult` | Fitted model: `predict()`, `to_sympy()`, `to_latex()`, `to_callable()`, `interpret()` |
 | `EarlyStopping` | Stop evolution when a monitored metric plateaus |
 | `GenerationLogger` | Print generation statistics at a chosen interval |
+
+**LLM module** (`from symgene.llm import ...` — requires `pip install symgene[llm]`)
+
+| Class / Function | Description |
+|---|---|
+| `LLMClient` | Provider-agnostic LLM wrapper (Anthropic / OpenAI) |
+| `LLMContext` | Library of natural-language concepts guiding LLM-assisted evolution |
+| `InsufficientContextError` | Raised when description is too vague for primitive selection |
+| `suggest_primitives()` | Ask LLM to select primitives for a given domain |
+| `abstract_concepts()` | Extract mathematical patterns from good/bad expressions |
+| `evolve_concepts()` | Refine and extend a concept library using LLM |
+| `rescue_worst()` | Genetic Rescue operator — rehabilitate worst individuals via LLM |
 
 ### Primitive presets
 

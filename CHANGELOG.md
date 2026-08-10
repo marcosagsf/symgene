@@ -7,7 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.2.0] — 2026-08-10
+
 ### Added
+
+**LLM-Assisted Evolution (`symgene[llm]` optional extra)**
+
+*Phase 1 — LLM-guided primitive set selection*
+- `LLMClient` — provider-agnostic LLM wrapper supporting Anthropic and OpenAI SDKs (`symgene/llm/client.py`)
+- `PrimitiveSet.from_description()` — classmethod that selects domain-relevant primitives from a natural-language description via LLM
+- `suggest_primitives()` — standalone function wrapping the LLM primitive selection prompt
+- `InsufficientContextError` — raised when the LLM determines the description is too vague; `llm_message` attribute contains the LLM's explanation of what additional context is needed
+- Dual response format protocol: FORMAT A (JSON primitive list) / FORMAT B (needs_more_info object)
+- `pip install symgene[llm]` optional dependency group (`anthropic>=0.34`, `openai>=1.0`)
+- Lazy loading via `__getattr__` in `symgene/llm/__init__.py`; base SymGene has zero LLM import cost
+
+*Phase 2 — Post-evolution LLM analysis*
+- `PopulationResult.interpret()` — asks LLM for physical interpretation of the best evolved expression
+- `SymGeneResult.interpret()` — multi-population wrapper returning `{pop_name: interpretation}` dict
+- `LLMContext` — Library of Concepts dataclass accumulating natural-language patterns across evolution runs
+- `LLMContext.from_result()` — builds context by abstracting concepts from best/worst HOF expressions
+- `LLMContext.evolve()` — refines and extends the concept library using the LLM; returns `self` for chaining
+- `abstract_concepts()` — identifies mathematical patterns distinguishing good from bad expressions
+- `evolve_concepts()` — generates refined concept combinations from existing library
+
+*Phase 3 — Genetic Rescue (inside the evolutionary loop)*
+- `rescue_worst()` — LLM operator that rehabilitates the worst `rescue_fraction` individuals using structure from the best individual + LLMContext concepts
+- Gene-level rescue: replaces one random gene per rescued individual
+- Individual-level rescue: replaces all genes of each rescued individual
+- `gp.PrimitiveTree.from_string()` parser: prefix-notation string → `SGGene`, with tree_max validation and markdown/numbering cleanup
+- `_call_llm_with_retry()`: retries on parse/format errors up to `llm_max_retries`; API exceptions propagate to caller
+- `SymGeneEvolver` LLM parameters: `llm_client`, `llm_context`, `llm_rescue`, `llm_rescue_fraction`, `llm_rescue_trigger` (`"stagnation"` / `"random"` / `"both"`), `llm_rescue_level` (`"gene"` / `"individual"`), `llm_stagnation_patience`, `llm_rescue_prob`, `llm_max_retries`
+- Per-population stagnation detection; counter resets after rescue fires
+- API error handling: prints warning, sets `_llm_disabled = True`, run continues normally without LLM
+- 18 new unit tests in `tests/llm/test_rescue.py`
+
+*General LLM infrastructure*
+- 36 unit tests across `tests/llm/` (primitive_suggest, interpret, context, rescue) — all using mocked clients, no real API calls
+- `tests/llm/conftest.py` with `requires_llm` skip marker for tests that need real SDK installation
+
+**Paper and documentation**
 - JOSS paper (`paper.md`) with summary, statement of need, software design, and research impact sections
 - `CONTRIBUTING.md` with contribution guidelines
 - `CODE_OF_CONDUCT.md` (Contributor Covenant)
@@ -121,5 +162,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - All Portuguese comments and docstrings translated to English
 - Example scripts refactored to distribute hyperparameter variety across three scripts (removed nuclear/BMD hard dependency)
 
-[Unreleased]: https://github.com/marcosagsf/symgene/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/marcosagsf/symgene/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/marcosagsf/symgene/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/marcosagsf/symgene/releases/tag/v0.1.0

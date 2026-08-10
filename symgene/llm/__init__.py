@@ -8,6 +8,7 @@ __all__ = [
     "interpret_population",
     "abstract_concepts",
     "evolve_concepts",
+    "rescue_worst",
 ]
 
 
@@ -33,4 +34,7 @@ def __getattr__(name: str) -> object:
     if name == "evolve_concepts":
         from symgene.llm.concept_abstraction import evolve_concepts
         return evolve_concepts
+    if name == "rescue_worst":
+        from symgene.llm.rescue import rescue_worst
+        return rescue_worst
     raise AttributeError(f"module 'symgene.llm' has no attribute {name!r}")

@@ -28,6 +28,16 @@ class SymGeneEvolver:
         migration_topology: str = "ring",
         migration_selection: str = "best",
         migration_replace: str = "worst",
+        # LLM Genetic Rescue
+        llm_client=None,
+        llm_context: dict | None = None,
+        llm_rescue: bool = False,
+        llm_rescue_fraction: float = 0.1,
+        llm_rescue_trigger: str = "stagnation",
+        llm_rescue_level: str = "gene",
+        llm_stagnation_patience: int = 20,
+        llm_rescue_prob: float = 0.1,
+        llm_max_retries: int = 3,
     ):
         self.populations = populations
         self.n_gen = n_gen
@@ -45,6 +55,15 @@ class SymGeneEvolver:
         self.migration_topology = migration_topology
         self.migration_selection = migration_selection
         self.migration_replace = migration_replace
+        self.llm_client = llm_client
+        self.llm_context = llm_context or {}
+        self.llm_rescue = llm_rescue
+        self.llm_rescue_fraction = llm_rescue_fraction
+        self.llm_rescue_trigger = llm_rescue_trigger
+        self.llm_rescue_level = llm_rescue_level
+        self.llm_stagnation_patience = llm_stagnation_patience
+        self.llm_rescue_prob = llm_rescue_prob
+        self.llm_max_retries = llm_max_retries
 
     def _build_logs(self, gen: int, pop_histories: dict) -> dict:
         logs = {"gen": gen}
@@ -72,6 +91,10 @@ class SymGeneEvolver:
             pop.evaluate(X, y[pop.name])
 
         pop_histories = {pop.name: [] for pop in self.populations}
+
+        _llm_disabled = False
+        _stagnation_counters = {pop.name: 0 for pop in self.populations}
+        _best_fitness_seen = {pop.name: float("inf") for pop in self.populations}
 
         for cb in self.callbacks:
             cb.on_train_begin()
@@ -101,8 +124,23 @@ class SymGeneEvolver:
                         print(f"  Gen {gen}: migration ({self.migration_topology},"
                               f" size={self.migration_size})")
 
+                if self.llm_rescue and not _llm_disabled and self.llm_client:
+                    api_error = self._apply_rescue(gen, _stagnation_counters)
+                    if api_error:
+                        _llm_disabled = True
+
                 for pop in self.populations:
                     pop.evaluate(X, y[pop.name])
+
+                for pop in self.populations:
+                    current_best = (
+                        pop.best.fitness.values[0] if pop.best else float("inf")
+                    )
+                    if current_best < _best_fitness_seen[pop.name] - 1e-8:
+                        _best_fitness_seen[pop.name] = current_best
+                        _stagnation_counters[pop.name] = 0
+                    else:
+                        _stagnation_counters[pop.name] += 1
 
                 for pop in self.populations:
                     best = pop.best
@@ -217,6 +255,61 @@ class SymGeneEvolver:
             return ind._combiner.predict(G)
         except Exception:
             return None
+
+    def _apply_rescue(
+        self,
+        gen: int,
+        stagnation_counters: dict,
+    ) -> bool:
+        """Run Genetic Rescue for all populations that meet the trigger condition.
+
+        Returns True if the LLM client raised an API error (disables for run).
+        """
+        from symgene.llm.rescue import rescue_worst
+
+        for pop in self.populations:
+            ctx = self.llm_context.get(pop.name)
+            if ctx is None:
+                continue
+
+            trigger = self.llm_rescue_trigger
+            should_rescue = False
+            if trigger in ("stagnation", "both"):
+                if stagnation_counters[pop.name] >= self.llm_stagnation_patience:
+                    should_rescue = True
+            if trigger in ("random", "both"):
+                if random.random() < self.llm_rescue_prob:
+                    should_rescue = True
+
+            if not should_rescue:
+                continue
+
+            try:
+                n = rescue_worst(
+                    pop,
+                    self.llm_client,
+                    ctx,
+                    rescue_fraction=self.llm_rescue_fraction,
+                    level=self.llm_rescue_level,
+                    max_retries=self.llm_max_retries,
+                )
+                if n > 0 and self.verbose >= 1:
+                    print(
+                        f"  Gen {gen}: Genetic Rescue — {n} individual(s) rescued"
+                        f" in '{pop.name}'"
+                    )
+                if trigger in ("stagnation", "both"):
+                    stagnation_counters[pop.name] = 0
+            except Exception as exc:
+                print(
+                    f"\n[SymGene LLM] WARNING: API error in Genetic Rescue"
+                    f" (gen {gen}, pop '{pop.name}'): {exc}\n"
+                    f"  Genetic Rescue disabled for this run."
+                    f" Evolution continues normally.\n"
+                )
+                return True  # signal: disable LLM
+
+        return False  # LLM still active
 
     def _save_checkpoint(self, gen: int):
         import os
