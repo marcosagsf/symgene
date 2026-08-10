@@ -87,6 +87,83 @@ class PrimitiveSet:
         self.squash = None
         return self
 
+    @classmethod
+    def from_description(
+        cls,
+        description: str,
+        client: object,
+        n_inputs: int,
+        feature_names: list[str] | None = None,
+        available: list[str] | None = None,
+        n_min: int = 8,
+        n_max: int = 16,
+    ) -> "PrimitiveSet":
+        """Build a PrimitiveSet whose primitives are chosen by an LLM.
+
+        Requires ``pip install symgene[llm]``.
+
+        Parameters
+        ----------
+        description : str
+            Natural-language description of the modeled phenomenon.
+        client : LLMClient
+            Configured LLM client from ``symgene.llm``.
+        n_inputs : int
+            Number of input variables.
+        feature_names : list of str or None
+            Domain names for the input variables (strongly recommended —
+            the LLM uses them to reason about the physics).
+        available : list of str or None
+            Restrict the catalog exposed to the LLM. Defaults to ALL.
+        n_min, n_max : int
+            Requested range for the number of primitives to select.
+
+        Returns
+        -------
+        PrimitiveSet
+            Configured instance with LLM-selected primitives already loaded.
+            Pass it directly to ``Population(pset=...)``.
+            Optionally call ``.add_ephemeral()`` or ``.set_squash()`` before
+            passing to Population — the Population calls ``.build()`` internally.
+
+        Raises
+        ------
+        InsufficientContextError
+            If the LLM determines the description is too vague to make
+            well-motivated selections. Check ``e.llm_message`` for what
+            additional context is needed, then retry with a richer description.
+
+        Examples
+        --------
+        >>> from symgene.llm import LLMClient, InsufficientContextError
+        >>> client = LLMClient(provider="anthropic", model="claude-haiku-4-5-20251001")
+        >>> try:
+        ...     pset = PrimitiveSet.from_description(
+        ...         description="axial power distribution in a PWR with burnup effects",
+        ...         client=client,
+        ...         n_inputs=5,
+        ...         feature_names=["burnup", "enrichment", "boron", "inlet_temp", "power"],
+        ...     )
+        ... except InsufficientContextError as e:
+        ...     print(e.llm_message)  # what the LLM needs to know
+        ...
+        >>> # Add ephemerals if needed, then plug into Population:
+        >>> pset.add_ephemeral("c", low=-1.0, high=1.0)
+        >>> pop = Population(name="PPF", pset=pset, ...)
+        """
+        from symgene.llm.primitive_suggest import suggest_primitives
+        names = suggest_primitives(
+            description=description,
+            client=client,
+            feature_names=feature_names,
+            available=available,
+            n_min=n_min,
+            n_max=n_max,
+        )
+        pset = cls(n_inputs=n_inputs, feature_names=feature_names)
+        pset.add_from_catalog(names)
+        return pset
+
     def build(self) -> gp.PrimitiveSet:
         """Compile into a DEAP PrimitiveSet ready for evolution."""
         deap_pset = gp.PrimitiveSet("MAIN", self.n_inputs)
