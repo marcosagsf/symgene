@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -62,11 +61,22 @@ End your response with a JSON list of hypothesis strings, e.g.:
 
 
 def _extract_json_list(text: str) -> list[str]:
-    match = re.search(r"\[.*?\]", text, re.DOTALL)
-    if not match:
-        raise ValueError(f"No JSON list found in LLM response:\n{text}")
-    raw = json.loads(match.group())
-    return [str(item) for item in raw if item]
+    # Walk backwards through all '[' positions and try raw_decode from each one.
+    # raw_decode stops at the end of the first valid JSON value — it tolerates
+    # trailing text and handles brackets nested inside JSON strings correctly.
+    decoder = json.JSONDecoder()
+    idx = len(text)
+    while True:
+        idx = text.rfind("[", 0, idx)
+        if idx == -1:
+            break
+        try:
+            raw, _ = decoder.raw_decode(text, idx)
+            if isinstance(raw, list):
+                return [str(item) for item in raw if item]
+        except json.JSONDecodeError:
+            pass
+    raise ValueError(f"No JSON list found in LLM response:\n{text}")
 
 
 def _format_expr_block(expressions: list[str]) -> str:

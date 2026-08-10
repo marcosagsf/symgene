@@ -2,8 +2,24 @@
 Sympy equivalents for every primitive in the symgene catalog.
 Used by PopulationResult.to_sympy() to convert DEAP trees to sympy expressions.
 The squash wrapper is intentionally omitted — these represent the mathematical intent.
+
+Activation and logical primitives use lazy UndefinedFunction wrappers instead of
+sp.Piecewise so that the sympy assumptions system is never triggered on complex
+symbolic arguments (which can recurse or hang indefinitely).
 """
 import sympy as sp
+
+# Lazy wrappers — never auto-evaluate, safe for arbitrarily deep symbolic args
+_relu     = sp.Function("relu")
+_sigmoid  = sp.Function("sigmoid")
+_softplus = sp.Function("softplus")
+_softsign = sp.Function("softsign")
+_swish    = sp.Function("swish")
+_elu      = sp.Function("elu")
+_sinc     = sp.Function("sinc")
+_step     = sp.Function("step")
+_ifpos    = sp.Function("if_positive")
+_ifgt     = sp.Function("if_greater")
 
 CATALOG_SYMPY: dict = {
     # ── Arithmetic ──────────────────────────────────────────────────────────
@@ -36,15 +52,15 @@ CATALOG_SYMPY: dict = {
     "sinh":     lambda x: sp.sinh(x),
     "cosh":     lambda x: sp.cosh(x),
     "atanh":    lambda x: sp.atanh(x),
-    # ── Activation ───────────────────────────────────────────────────────────
-    "sigmoid":  lambda x: 1 / (1 + sp.exp(-x)),
-    "relu":     lambda x: sp.Piecewise((x, x > 0), (sp.Integer(0), True)),
-    "gaussian": lambda x: sp.exp(-x ** 2),
-    "softplus": lambda x: sp.log(1 + sp.exp(x)),
-    "softsign": lambda x: x / (1 + sp.Abs(x)),
-    "swish":    lambda x: x / (1 + sp.exp(-x)),
-    "elu":      lambda x: sp.Piecewise((x, x > 0), (sp.exp(x) - 1, True)),
-    "sinc":     lambda x: sp.Piecewise((sp.sin(x) / x, sp.Ne(x, 0)), (sp.Integer(1), True)),
+    # ── Activation — lazy wrappers avoid Piecewise/assumptions hang ──────────
+    "sigmoid":  _sigmoid,
+    "relu":     _relu,
+    "gaussian": lambda x: sp.exp(-(x ** 2)),
+    "softplus": _softplus,
+    "softsign": _softsign,
+    "swish":    _swish,
+    "elu":      _elu,
+    "sinc":     _sinc,
     # ── Statistical ─────────────────────────────────────────────────────────
     "mean2":            lambda x, y: (x + y) / 2,
     "mean3":            lambda x, y, z: (x + y + z) / 3,
@@ -57,8 +73,8 @@ CATALOG_SYMPY: dict = {
     "min4":             lambda x, y, z, w: sp.Min(x, y, z, w),
     "harmonic_mean2":   lambda x, y: 2 * x * y / (x + y),
     "geometric_mean2":  lambda x, y: sp.sqrt(sp.Abs(x * y)),
-    # ── Logical ──────────────────────────────────────────────────────────────
-    "if_positive":  lambda x, y, z: sp.Piecewise((y, x > 0), (z, True)),
-    "step":         lambda x: sp.Piecewise((sp.Integer(1), x > 0), (sp.Integer(0), True)),
-    "if_greater":   lambda x, y, z, w: sp.Piecewise((z, x > y), (w, True)),
+    # ── Logical — lazy wrappers to avoid Piecewise/assumptions hang ──────────
+    "if_positive":  lambda x, y, z: _ifpos(x, y, z),
+    "step":         _step,
+    "if_greater":   lambda x, y, z, w: _ifgt(x, y, z, w),
 }

@@ -94,19 +94,21 @@ class PopulationResult:
                 expr, _ = _eval(list(gene), 0)
                 exprs.append(expr)
             return exprs
-        except Exception as e:
-            return str(e)
+        except Exception:
+            return []
 
     def to_latex(self) -> str:
         try:
             import sympy
             exprs = self.to_sympy()
-            if isinstance(exprs, list):
+            if isinstance(exprs, list) and exprs:
                 parts = [sympy.latex(e) for e in exprs if e is not None]
-                return " + ".join(parts) if parts else ""
-            return str(exprs)
+                result = " + ".join(p for p in parts if p)
+                if result:
+                    return result
         except Exception:
-            return self.best_expression_
+            pass
+        return self.best_expression_
 
     def to_callable(self):
         ind = self.best_individual_

@@ -45,7 +45,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7.4", "pytest-cov"]
-llm = ["anthropic>=0.34", "openai>=1.0"]
+llm = ["anthropic>=0.34", "openai>=1.0", "google-genai>=1.0"]
 
 [project.urls]
 Repository = "https://github.com/marcosagsf/symgene"

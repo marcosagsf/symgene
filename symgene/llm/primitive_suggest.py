@@ -5,7 +5,7 @@ import re
 import warnings
 from typing import TYPE_CHECKING
 
-from symgene.primitives.catalog import ALL
+from symgene.primitives.catalog import ALL, STANDARD
 
 if TYPE_CHECKING:
     from symgene.llm.client import LLMClient
@@ -148,10 +148,20 @@ def _parse_response(text: str) -> list[str]:
         except (json.JSONDecodeError, KeyError):
             pass  # not a valid needs_more_info object — fall through to list
 
-    # Try FORMAT A (JSON list)
-    list_match = re.search(r"\[.*?\]", text, re.DOTALL)
-    if list_match:
-        return json.loads(list_match.group())
+    # Try FORMAT A (JSON list) — walk backwards through all '[' positions.
+    # raw_decode tolerates trailing text and handles brackets inside strings.
+    decoder = json.JSONDecoder()
+    search_idx = len(text)
+    while True:
+        search_idx = text.rfind("[", 0, search_idx)
+        if search_idx == -1:
+            break
+        try:
+            parsed, _ = decoder.raw_decode(text, search_idx)
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError:
+            pass
 
     raise ValueError(f"LLM response did not match either expected format:\n{text}")
 
@@ -235,7 +245,6 @@ def suggest_primitives(
             UserWarning,
             stacklevel=2,
         )
-        from symgene.primitives.catalog import STANDARD
         return list(STANDARD)
 
     return validated
