@@ -86,6 +86,12 @@ class SymGeneRegressor:
     def predict(self, X: np.ndarray) -> np.ndarray:
         return self._result.predict(X)
 
+    def score(self, X: np.ndarray, y: np.ndarray) -> float:
+        y_pred = self.predict(X)
+        ss_res = float(np.sum((y - y_pred) ** 2))
+        ss_tot = float(np.sum((y - np.mean(y)) ** 2))
+        return 1.0 - ss_res / ss_tot if ss_tot > 0.0 else 0.0
+
     def __getattr__(self, name: str):
         if name.startswith("_") or self._result is None:
             raise AttributeError(name)

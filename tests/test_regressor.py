@@ -39,3 +39,28 @@ def test_regressor_with_feature_names():
     model.fit(X, y)
     expr = model.best_expression_
     assert any(name in expr for name in ["age", "bmd", "weight", "height"])
+
+
+# ── score() method ────────────────────────────────────────────────────────────
+
+def test_score_returns_float():
+    model = SymGeneRegressor(n_genes=2, pop_size=10, n_gen=3, seed=0, verbose=0)
+    model.fit(X, y)
+    result = model.score(X, y)
+    assert isinstance(result, float)
+
+
+def test_score_matches_r2_formula():
+    model = SymGeneRegressor(n_genes=2, pop_size=10, n_gen=3, seed=0, verbose=0)
+    model.fit(X, y)
+    y_pred = model.predict(X)
+    ss_res = float(np.sum((y - y_pred) ** 2))
+    ss_tot = float(np.sum((y - np.mean(y)) ** 2))
+    expected = 1.0 - ss_res / ss_tot
+    assert model.score(X, y) == pytest.approx(expected)
+
+
+def test_score_not_fitted_raises():
+    model = SymGeneRegressor(n_genes=2, pop_size=8, n_gen=1, verbose=0)
+    with pytest.raises((AttributeError, TypeError)):
+        model.score(X, y)
