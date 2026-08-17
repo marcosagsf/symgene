@@ -83,3 +83,29 @@ def test_population_result_has_plot_expression_tree():
     results = evolver.fit(X, {"p": y})
     results["p"].plot_expression_tree()
     plt.close("all")
+
+
+# ── FigureCanvasAgg warning fix ───────────────────────────────────────────────
+
+def test_plot_tree_does_not_call_show_in_agg(monkeypatch):
+    from symgene.visualization.expression import plot_tree
+    tree = _make_tree()
+    called = []
+    monkeypatch.setattr(plt, "show", lambda: called.append(True))
+    plot_tree(tree)  # no ax — triggers internal fig creation and plt.show()
+    plt.close("all")
+    assert called == [], "plt.show() must not be called in non-interactive (Agg) backend"
+
+
+def test_plot_individual_trees_does_not_call_show_in_agg(monkeypatch):
+    from symgene.visualization.expression import plot_individual_trees
+    tree = _make_tree()
+
+    class FakeIndividual:
+        def __iter__(self): return iter([tree])
+
+    called = []
+    monkeypatch.setattr(plt, "show", lambda: called.append(True))
+    plot_individual_trees(FakeIndividual())
+    plt.close("all")
+    assert called == [], "plt.show() must not be called in non-interactive (Agg) backend"

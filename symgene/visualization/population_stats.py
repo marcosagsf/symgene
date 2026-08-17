@@ -1,6 +1,12 @@
 """Population-level statistics plots."""
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+
+
+def _show():
+    if matplotlib.get_backend().lower() != "agg":
+        plt.show()
 
 
 def plot_n_genes_over_time(history: list, pop_name: str = "", ax=None):
@@ -17,7 +23,7 @@ def plot_n_genes_over_time(history: list, pop_name: str = "", ax=None):
     ax.set_title(f"Gene growth — {pop_name}" if pop_name else "Gene growth")
     if fig is not None:
         plt.tight_layout()
-        plt.show()
+        _show()
 
 
 def plot_gene_weights(coefficients, pop_name: str = "", ax=None):
@@ -32,7 +38,7 @@ def plot_gene_weights(coefficients, pop_name: str = "", ax=None):
     ax.set_title(f"Gene weights — {pop_name}" if pop_name else "Gene weights")
     if fig is not None:
         plt.tight_layout()
-        plt.show()
+        _show()
 
 
 def plot_complexity_distribution(individuals: list, ax=None):
@@ -47,4 +53,4 @@ def plot_complexity_distribution(individuals: list, ax=None):
     ax.set_title("Complexity distribution")
     if fig is not None:
         plt.tight_layout()
-        plt.show()
+        _show()

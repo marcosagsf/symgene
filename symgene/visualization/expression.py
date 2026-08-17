@@ -1,5 +1,11 @@
 """Expression tree visualization for MGGP genes (pure matplotlib, no networkx)."""
+import matplotlib
 import matplotlib.pyplot as plt
+
+
+def _show():
+    if matplotlib.get_backend().lower() != "agg":
+        plt.show()
 
 
 def _parse_tree(tree) -> dict:
@@ -94,7 +100,7 @@ def plot_tree(tree, feature_names: list | None = None, ax=None, title: str = "")
         ax.set_title(title)
     if fig is not None:
         plt.tight_layout()
-        plt.show()
+        _show()
     return ax
 
 
@@ -108,4 +114,4 @@ def plot_individual_trees(individual, feature_names: list | None = None, max_gen
     for i, (gene, ax) in enumerate(zip(genes, axes)):
         plot_tree(gene, feature_names=feature_names, ax=ax, title=f"Gene {i + 1}")
     plt.tight_layout()
-    plt.show()
+    _show()

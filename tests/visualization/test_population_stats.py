@@ -72,3 +72,40 @@ def test_population_result_plot_gene_weights_no_error():
     results = evolver.fit(X, {"p": y})
     results["p"].plot_gene_weights()
     plt.close("all")
+
+
+# ── FigureCanvasAgg warning fix ───────────────────────────────────────────────
+
+def test_plot_n_genes_does_not_call_show_in_agg(monkeypatch):
+    from symgene.visualization.population_stats import plot_n_genes_over_time
+    called = []
+    monkeypatch.setattr(plt, "show", lambda: called.append(True))
+    history = [{"gen": i, "n_genes": 4} for i in range(5)]
+    plot_n_genes_over_time(history, pop_name="test")
+    plt.close("all")
+    assert called == [], "plt.show() must not be called in non-interactive (Agg) backend"
+
+
+def test_plot_gene_weights_does_not_call_show_in_agg(monkeypatch):
+    from symgene.visualization.population_stats import plot_gene_weights
+    called = []
+    monkeypatch.setattr(plt, "show", lambda: called.append(True))
+    plot_gene_weights(np.array([0.5, -0.3, 0.8]))
+    plt.close("all")
+    assert called == [], "plt.show() must not be called in non-interactive (Agg) backend"
+
+
+def test_plot_complexity_does_not_call_show_in_agg(monkeypatch):
+    from symgene.visualization.population_stats import plot_complexity_distribution
+
+    class FakeGene:
+        def __len__(self): return 5
+
+    class FakeInd:
+        def __iter__(self): return iter([FakeGene()])
+
+    called = []
+    monkeypatch.setattr(plt, "show", lambda: called.append(True))
+    plot_complexity_distribution([FakeInd() for _ in range(5)])
+    plt.close("all")
+    assert called == [], "plt.show() must not be called in non-interactive (Agg) backend"
