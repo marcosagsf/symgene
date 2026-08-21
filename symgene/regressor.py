@@ -92,6 +92,47 @@ class SymGeneRegressor:
         ss_tot = float(np.sum((y - np.mean(y)) ** 2))
         return 1.0 - ss_res / ss_tot if ss_tot > 0.0 else 0.0
 
+    def __sklearn_tags__(self):
+        try:
+            from sklearn.utils._tags import Tags, RegressorTags, TargetTags, InputTags
+            return Tags(
+                estimator_type="regressor",
+                target_tags=TargetTags(required=True, multi_output=False),
+                regressor_tags=RegressorTags(),
+                input_tags=InputTags(allow_nan=False),
+            )
+        except (ImportError, TypeError):
+            return {"estimator_type": "regressor"}
+
+    def get_params(self, deep: bool = True) -> dict:
+        return {
+            "n_genes": self.n_genes,
+            "pop_size": self.pop_size,
+            "n_gen": self.n_gen,
+            "primitives": self.primitives,
+            "squash": self.squash,
+            "combiner": self.combiner,
+            "ridge_alphas": self.ridge_alphas,
+            "regression_degree": self.regression_degree,
+            "feature_names": self.feature_names,
+            "seed": self.seed,
+            "verbose": self.verbose,
+            **self._population_kwargs,
+        }
+
+    def set_params(self, **params) -> "SymGeneRegressor":
+        _named = {
+            "n_genes", "pop_size", "n_gen", "primitives", "squash",
+            "combiner", "ridge_alphas", "regression_degree",
+            "feature_names", "seed", "verbose",
+        }
+        for key, value in params.items():
+            if key in _named:
+                setattr(self, key, value)
+            else:
+                self._population_kwargs[key] = value
+        return self
+
     def __getattr__(self, name: str):
         if name.startswith("_") or self._result is None:
             raise AttributeError(name)
