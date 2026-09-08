@@ -1,6 +1,6 @@
 import random
 from functools import partial
-from typing import Callable
+from typing import Any, Callable
 import deap.gp as gp
 from symgene.primitives.squash import Squash
 from symgene.primitives.catalog import get_catalog, STANDARD
@@ -57,7 +57,7 @@ class PrimitiveSet:
         self.primitives.append((fn, arity, name, sympy_fn))
         return self
 
-    def sympy_registry(self) -> dict:
+    def sympy_registry(self) -> dict[str, Any]:
         """Retorna {name: sympy_fn} para todas as primitivas registradas."""
         return {name: sfn for _, _, name, sfn in self.primitives}
 
@@ -87,11 +87,13 @@ class PrimitiveSet:
         self.squash = None
         return self
 
+
+
     @classmethod
     def from_description(
         cls,
         description: str,
-        client: object,
+        client: Any,
         n_inputs: int,
         feature_names: list[str] | None = None,
         available: list[str] | None = None,

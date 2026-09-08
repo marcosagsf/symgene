@@ -1,7 +1,12 @@
 """SymGeneEvolver — multi-population evolutionary loop with migration support."""
+from __future__ import annotations
 import random
 import numpy as np
 import deap.tools as tools
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from symgene.results import SymGeneResult
 
 from symgene.population import Population
 from symgene.operators.crossover import intra_crossover
@@ -18,7 +23,7 @@ class SymGeneEvolver:
         cxpb_inter: float = 0.025,
         seed: int | None = None,
         n_jobs: int = 1,
-        callbacks: list | None = None,
+        callbacks: list[Any] | None = None,
         checkpoint_dir: str | None = None,
         checkpoint_every: int = 50,
         verbose: int = 1,
@@ -29,8 +34,8 @@ class SymGeneEvolver:
         migration_selection: str = "best",
         migration_replace: str = "worst",
         # LLM Genetic Rescue
-        llm_client=None,
-        llm_context: dict | None = None,
+        llm_client: Any = None,
+        llm_context: dict[str, Any] | None = None,
         llm_rescue: bool = False,
         llm_rescue_fraction: float = 0.1,
         llm_rescue_trigger: str = "stagnation",
@@ -65,7 +70,7 @@ class SymGeneEvolver:
         self.llm_rescue_prob = llm_rescue_prob
         self.llm_max_retries = llm_max_retries
 
-    def _build_logs(self, gen: int, pop_histories: dict) -> dict:
+    def _build_logs(self, gen: int, pop_histories: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
         logs = {"gen": gen}
         for pop_name, history in pop_histories.items():
             if history:
@@ -81,7 +86,7 @@ class SymGeneEvolver:
         y: dict[str, np.ndarray],
         X_val: np.ndarray | None = None,
         y_val: dict[str, np.ndarray] | None = None,
-    ):
+    ) -> SymGeneResult:
         if self.seed is not None:
             random.seed(self.seed)
             np.random.seed(self.seed)
@@ -90,7 +95,7 @@ class SymGeneEvolver:
             pop.initialize(seed=self.seed)
             pop.evaluate(X, y[pop.name])
 
-        pop_histories = {pop.name: [] for pop in self.populations}
+        pop_histories: dict[str, list[dict[str, Any]]] = {pop.name: [] for pop in self.populations}
 
         _llm_disabled = False
         _stagnation_counters = {pop.name: 0 for pop in self.populations}
@@ -192,7 +197,8 @@ class SymGeneEvolver:
             for pop in self.populations
         })
 
-    def _evolve_population(self, pop: Population, X, y):
+    def _evolve_population(self, pop: Population, X: np.ndarray, y: np.ndarray) -> None:
+        assert pop._toolbox is not None
         tb = pop._toolbox
         n_elite = pop.n_elite
         elite = list(map(tb.clone, tools.selBest(pop._population, n_elite)))
@@ -224,7 +230,7 @@ class SymGeneEvolver:
 
         pop._population[:] = offspring + elite
 
-    def _interpop_step(self, X, y):
+    def _interpop_step(self, X: np.ndarray, y: dict[str, np.ndarray]) -> None:
         from symgene.operators.crossover import interpop_crossover
         pairs = [
             (self.populations[i], self.populations[j])
@@ -243,7 +249,7 @@ class SymGeneEvolver:
                     popA._toolbox, cxpb_low_inter=0.3, tree_max=popA.tree_max,
                 )
 
-    def _predict_individual(self, ind, pop: Population, X: np.ndarray):
+    def _predict_individual(self, ind: Any, pop: Population, X: np.ndarray) -> np.ndarray | None:
         if ind is None or not hasattr(ind, '_combiner'):
             return None
         try:
@@ -311,8 +317,9 @@ class SymGeneEvolver:
 
         return False  # LLM still active
 
-    def _save_checkpoint(self, gen: int):
+    def _save_checkpoint(self, gen: int) -> None:
         import os
+        assert self.checkpoint_dir is not None
         try:
             import dill as _pickle
         except ImportError:

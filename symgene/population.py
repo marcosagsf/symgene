@@ -4,6 +4,7 @@ import deap.gp as gp
 import deap.base as base
 import deap.creator as creator
 import deap.tools as tools
+from typing import Any
 
 from symgene.primitive_set import PrimitiveSet
 from symgene.fitness import FitnessEvaluator
@@ -48,7 +49,7 @@ class Population:
         ridge_alphas: list[float] | None = None,
         regression_degree: int = 1,
         fitness: FitnessEvaluator | None = None,
-        selection=None,
+        selection: Any = None,
         elite_ratio: float = 0.025,
         cxpb: float = 0.975,
         cxpb_low: float = 0.5,
@@ -79,21 +80,22 @@ class Population:
         self.mutation_weights = mutation_weights or [1.0, 1.0, 1.2]
         self.schedule = schedule or {}
 
-        self._deap_pset = None
-        self._toolbox = None
-        self._population = []
-        self._hof = None
-        self.history = []
+        self._deap_pset: gp.PrimitiveSet | None = None
+        self._toolbox: base.Toolbox | None = None
+        self._population: list[Any] = []
+        self._hof: tools.HallOfFame | None = None
+        self.history: list[dict[str, Any]] = []
 
-    def initialize(self, seed: int | None = None):
+    def initialize(self, seed: int | None = None) -> None:
         if seed is not None:
             random.seed(seed)
         self._deap_pset = self.pset.build()
         self._setup_toolbox()
+        assert self._toolbox is not None
         self._population = [self._toolbox.individual() for _ in range(self.pop_size)]
         self._hof = tools.HallOfFame(maxsize=10)
 
-    def _setup_toolbox(self):
+    def _setup_toolbox(self) -> None:
         self._toolbox = base.Toolbox()
 
         def gen_tree():
@@ -129,17 +131,18 @@ class Population:
             creator.SGGene(g) for g in ind
         ))
 
-    def evaluate(self, X: np.ndarray, y: np.ndarray):
-        combiner_kwargs = {"degree": self.regression_degree}
+    def evaluate(self, X: np.ndarray, y: np.ndarray) -> None:
+        combiner_kwargs: dict[str, Any] = {"degree": self.regression_degree}
         if self.combiner_name in ("ridge", "lasso"):
             combiner_kwargs["alphas"] = self.ridge_alphas
 
         for ind in self._population:
             self._eval_individual(ind, X, y, combiner_kwargs)
 
+        assert self._hof is not None
         self._hof.update(self._population)
 
-    def _eval_individual(self, ind, X, y, combiner_kwargs):
+    def _eval_individual(self, ind: Any, X: np.ndarray, y: np.ndarray, combiner_kwargs: dict[str, Any]) -> None:
         try:
             funcs = [gp.compile(expr=gene, pset=self._deap_pset) for gene in ind]
             G = np.column_stack([
@@ -160,14 +163,14 @@ class Population:
         except Exception:
             ind.fitness.values = (1e9,)
 
-    def apply_schedule(self, generation: int):
+    def apply_schedule(self, generation: int) -> None:
         for param, timeline in self.schedule.items():
             for gen_key in sorted(timeline.keys()):
                 if generation >= gen_key:
                     setattr(self, param, timeline[gen_key])
 
     @property
-    def best(self):
+    def best(self) -> Any:
         return self._hof[0] if self._hof else None
 
     @property

@@ -1,4 +1,5 @@
 import numpy as np
+from typing import Any
 from symgene.primitive_set import PrimitiveSet
 from symgene.primitives.catalog import STANDARD
 from symgene.population import Population
@@ -15,7 +16,7 @@ class SymGeneRegressor:
         n_genes: int = 8,
         pop_size: int = 100,
         n_gen: int = 200,
-        primitives=None,
+        primitives: list[str] | None = None,
         squash: dict | None = None,
         combiner: str = "ridge",
         ridge_alphas: list | None = None,
@@ -37,7 +38,7 @@ class SymGeneRegressor:
         self.seed = seed
         self.verbose = verbose
         self._population_kwargs = population_kwargs
-        self._result = None
+        self._result: Any = None
 
     def fit(
         self,
@@ -104,7 +105,7 @@ class SymGeneRegressor:
         except (ImportError, TypeError):
             return {"estimator_type": "regressor"}
 
-    def get_params(self, deep: bool = True) -> dict:
+    def get_params(self, deep: bool = True) -> dict[str, Any]:
         return {
             "n_genes": self.n_genes,
             "pop_size": self.pop_size,
@@ -120,7 +121,7 @@ class SymGeneRegressor:
             **self._population_kwargs,
         }
 
-    def set_params(self, **params) -> "SymGeneRegressor":
+    def set_params(self, **params: Any) -> "SymGeneRegressor":
         _named = {
             "n_genes", "pop_size", "n_gen", "primitives", "squash",
             "combiner", "ridge_alphas", "regression_degree",

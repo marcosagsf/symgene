@@ -1,6 +1,8 @@
+from __future__ import annotations
 import os
 import numpy as np
 import deap.gp as gp
+from typing import Any, Callable
 
 try:
     import dill as pickle
@@ -9,7 +11,7 @@ except ImportError:
 
 
 class PopulationResult:
-    def __init__(self, population, history: list[dict], evolver):
+    def __init__(self, population: Any, history: list[dict[str, Any]], evolver: Any) -> None:
         self._pop = population
         self._evolver = evolver
         self.history_ = history
@@ -46,7 +48,7 @@ class PopulationResult:
     def to_string(self) -> str:
         return self.best_expression_
 
-    def to_sympy(self):
+    def to_sympy(self) -> list[Any]:
         try:
             import sympy as sp
             import deap.gp as gp
@@ -110,7 +112,7 @@ class PopulationResult:
             pass
         return self.best_expression_
 
-    def to_callable(self):
+    def to_callable(self) -> Callable[[np.ndarray], np.ndarray] | None:
         ind = self.best_individual_
         pop = self._pop
         if ind is None: return None
@@ -122,14 +124,14 @@ class PopulationResult:
             return combiner.predict(G)
         return fn
 
-    def plot_convergence(self, ax=None):
+    def plot_convergence(self, ax: Any = None) -> None:
         import matplotlib.pyplot as plt
         gens = [h["gen"] for h in self.history_]
         fitness = [h["train_mse"] for h in self.history_]
         fig, ax_ = (None, ax) if ax else plt.subplots()
         ax_.plot(gens, fitness, label="train_mse")
         if self.history_ and "val_r2" in self.history_[0]:
-            val_r2 = [h.get("val_r2") for h in self.history_]
+            val_r2: list[Any] = [h.get("val_r2") for h in self.history_]
             ax2 = ax_.twinx()
             ax2.plot(gens, val_r2, color="orange", label="val_r2")
             ax2.set_ylabel("val R²")
@@ -138,7 +140,7 @@ class PopulationResult:
         ax_.set_title(f"Convergence — {self._pop.name}")
         if ax is None: plt.tight_layout(); plt.show()
 
-    def plot_prediction(self, X: np.ndarray, y: np.ndarray, ax=None):
+    def plot_prediction(self, X: np.ndarray, y: np.ndarray, ax: Any = None) -> None:
         import matplotlib.pyplot as plt
         y_pred = self.predict(X)
         fig, ax_ = (None, ax) if ax else plt.subplots()
@@ -149,7 +151,7 @@ class PopulationResult:
         ax_.set_title(f"Prediction — {self._pop.name}")
         if ax is None: plt.tight_layout(); plt.show()
 
-    def plot_pareto(self, X: np.ndarray, y: np.ndarray, ax=None):
+    def plot_pareto(self, X: np.ndarray, y: np.ndarray, ax: Any = None) -> None:
         import matplotlib.pyplot as plt
         from symgene.metrics.regression import mse as mse_fn
         hof = list(self._pop._hof)
@@ -171,7 +173,7 @@ class PopulationResult:
         ax_.legend()
         if ax is None: plt.tight_layout(); plt.show()
 
-    def plot_expression_tree(self, gene_idx: int = 0, ax=None):
+    def plot_expression_tree(self, gene_idx: int = 0, ax: Any = None) -> None:
         from symgene.visualization.expression import plot_tree
         ind = self.best_individual_
         if ind is None or len(ind) == 0:
@@ -186,7 +188,7 @@ class PopulationResult:
 
     def interpret(
         self,
-        client: object,
+        client: Any,
         description: str = "not provided",
         target_name: str | None = None,
     ) -> str:
@@ -231,7 +233,7 @@ class PopulationResult:
             client=client,
         )
 
-    def plot_gene_weights(self, ax=None):
+    def plot_gene_weights(self, ax: Any = None) -> None:
         from symgene.visualization.population_stats import plot_gene_weights
         coef = self.coefficients_
         if coef is not None:
@@ -246,16 +248,16 @@ class PopulationResult:
         front_idx = self._pareto_front_indices(complexities, errors)
         return [hof[i] for i in front_idx]
 
-    def best_by_accuracy(self):
+    def best_by_accuracy(self) -> Any:
         return self.best_individual_
 
-    def best_by_simplicity(self, max_error: float = 0.1):
+    def best_by_simplicity(self, max_error: float = 0.1) -> Any:
         front = self.pareto_front_
         candidates = [ind for ind in front if ind.fitness.values[0] <= max_error]
         if not candidates: return front[-1] if front else self.best_individual_
         return min(candidates, key=lambda ind: sum(len(g) for g in ind))
 
-    def best_by_pareto(self, weight: float = 0.5):
+    def best_by_pareto(self, weight: float = 0.5) -> Any:
         front = self.pareto_front_
         if not front: return self.best_individual_
         errors = np.array([ind.fitness.values[0] for ind in front])
@@ -286,7 +288,7 @@ class SymGeneResult(dict):
 
     def interpret(
         self,
-        client: object,
+        client: Any,
         descriptions: dict[str, str] | str = "not provided",
         target_names: dict[str, str] | None = None,
     ) -> dict[str, str]:
