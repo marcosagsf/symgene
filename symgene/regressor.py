@@ -9,7 +9,56 @@ from symgene.metrics.regression import mse
 
 
 class SymGeneRegressor:
-    """High-level single-output MGGP regressor."""
+    """High-level single-output MGGP regressor with sklearn-compatible API.
+
+    Wraps a single :class:`~symgene.Population` and
+    :class:`~symgene.SymGeneEvolver` into a fit/predict/score interface
+    compatible with ``sklearn`` pipelines, ``cross_val_score``, and
+    ``GridSearchCV``.
+
+    Parameters
+    ----------
+    n_genes : int
+        Number of gene trees per individual. Default ``8``.
+    pop_size : int
+        Population size. Default ``100``.
+    n_gen : int
+        Maximum number of generations. Default ``200``.
+    primitives : list of str, optional
+        Catalog keys for primitive functions. Defaults to ``STANDARD``.
+    squash : dict, optional
+        Keyword arguments forwarded to :meth:`PrimitiveSet.set_squash`.
+        ``None`` disables squashing.
+    combiner : {"ridge", "lasso", "linear"}
+        Gene-combination strategy. Default ``"ridge"``.
+    ridge_alphas : list of float, optional
+        Regularization candidates for RidgeCombiner/LassoCombiner.
+        Default ``[1.0, 5.0, 10.0]``.
+    regression_degree : int
+        Polynomial degree of the combiner feature matrix. Default ``1``.
+    feature_names : list of str, optional
+        Names for the input columns. Used in :meth:`to_sympy` /
+        :meth:`to_latex` output.
+    seed : int, optional
+        Random seed for reproducibility.
+    verbose : int
+        Verbosity level (``0`` = silent, ``1`` = per-milestone,
+        ``2`` = per-generation). Default ``1``.
+    **population_kwargs
+        Extra keyword arguments forwarded to :class:`~symgene.Population`.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from symgene import SymGeneRegressor
+    >>> rng = np.random.default_rng(0)
+    >>> X = rng.standard_normal((60, 2))
+    >>> y = X[:, 0] ** 2 + X[:, 1]
+    >>> reg = SymGeneRegressor(n_genes=2, pop_size=20, n_gen=5, seed=42, verbose=0)
+    >>> _ = reg.fit(X, y)
+    >>> reg.score(X, y) > 0
+    True
+    """
 
     def __init__(
         self,
@@ -47,6 +96,25 @@ class SymGeneRegressor:
         X_val: np.ndarray | None = None,
         y_val: np.ndarray | None = None,
     ) -> "SymGeneRegressor":
+        """Evolve the MGGP model on training data.
+
+        Parameters
+        ----------
+        X : np.ndarray of shape (n_samples, n_features)
+            Training input matrix.
+        y : np.ndarray of shape (n_samples,)
+            Training target values.
+        X_val : np.ndarray of shape (n_val, n_features), optional
+            Validation inputs. If provided, ``val_r2`` is tracked per
+            generation and available in the result history.
+        y_val : np.ndarray of shape (n_val,), optional
+            Validation targets. Required if ``X_val`` is given.
+
+        Returns
+        -------
+        SymGeneRegressor
+            ``self``, for method chaining (sklearn convention).
+        """
         n_inputs = X.shape[1]
         pset = PrimitiveSet(
             n_inputs=n_inputs,
@@ -85,9 +153,36 @@ class SymGeneRegressor:
         return self
 
     def predict(self, X: np.ndarray) -> np.ndarray:
+        """Predict target values for new input data.
+
+        Parameters
+        ----------
+        X : np.ndarray of shape (n_samples, n_features)
+            Input matrix.
+
+        Returns
+        -------
+        np.ndarray of shape (n_samples,)
+            Predicted values from the best evolved individual.
+        """
         return self._result.predict(X)
 
     def score(self, X: np.ndarray, y: np.ndarray) -> float:
+        """Compute R² (coefficient of determination) on the given data.
+
+        Parameters
+        ----------
+        X : np.ndarray of shape (n_samples, n_features)
+            Input matrix.
+        y : np.ndarray of shape (n_samples,)
+            True target values.
+
+        Returns
+        -------
+        float
+            R² score. Best possible is ``1.0``; can be negative for
+            very poor models.
+        """
         y_pred = self.predict(X)
         ss_res = float(np.sum((y - y_pred) ** 2))
         ss_tot = float(np.sum((y - np.mean(y)) ** 2))
@@ -106,6 +201,18 @@ class SymGeneRegressor:
             return {"estimator_type": "regressor"}
 
     def get_params(self, deep: bool = True) -> dict[str, Any]:
+        """Return estimator parameters (sklearn ``BaseEstimator`` protocol).
+
+        Parameters
+        ----------
+        deep : bool
+            Ignored (no sub-estimators). Kept for sklearn compatibility.
+
+        Returns
+        -------
+        dict
+            All constructor parameters by name.
+        """
         return {
             "n_genes": self.n_genes,
             "pop_size": self.pop_size,
@@ -122,6 +229,20 @@ class SymGeneRegressor:
         }
 
     def set_params(self, **params: Any) -> "SymGeneRegressor":
+        """Set estimator parameters (sklearn ``BaseEstimator`` protocol).
+
+        Parameters
+        ----------
+        **params
+            Parameter names and their new values. Unknown keys are stored
+            in ``_population_kwargs`` and forwarded to
+            :class:`~symgene.Population`.
+
+        Returns
+        -------
+        SymGeneRegressor
+            ``self``, for method chaining.
+        """
         _named = {
             "n_genes", "pop_size", "n_gen", "primitives", "squash",
             "combiner", "ridge_alphas", "regression_degree",
