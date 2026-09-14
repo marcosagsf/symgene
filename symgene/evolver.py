@@ -15,6 +15,90 @@ from symgene.metrics.regression import r2, mse
 
 
 class SymGeneEvolver:
+    """Multi-population evolutionary loop with optional migration and LLM rescue.
+
+    Drives one or more :class:`~symgene.Population` instances through
+    ``n_gen`` generations of selection, crossover, and mutation. Supports
+    island-model evolution (multiple populations with periodic migration),
+    early stopping via callbacks, and LLM-guided Genetic Rescue.
+
+    Parameters
+    ----------
+    populations : list of Population
+        One or more populations to evolve in parallel.
+    n_gen : int
+        Maximum number of generations. Default ``200``.
+    cross_population : bool
+        Enable inter-population gene exchange each generation. Default ``False``.
+    cxpb_inter : float
+        Fraction of individuals exchanged per inter-population crossover event.
+        Default ``0.025``.
+    seed : int, optional
+        Global random seed (applied to both Python ``random`` and NumPy).
+    n_jobs : int
+        Reserved for future parallelisation (not yet implemented). Default ``1``.
+    callbacks : list of Callback, optional
+        Training callbacks (e.g. ``EarlyStopping``, ``Logger``).
+    checkpoint_dir : str, optional
+        Directory to write generation checkpoints (``.sgk`` files).
+    checkpoint_every : int
+        Checkpoint interval in generations. Default ``50``.
+    verbose : int
+        Verbosity level (``0`` = silent, ``1`` = milestones,
+        ``2`` = every generation). Default ``1``.
+    migration : bool
+        Enable periodic island migration. Default ``False``.
+    migration_freq : int
+        Migration interval in generations. Default ``50``.
+    migration_size : int
+        Number of individuals transferred per migration event. Default ``1``.
+    migration_topology : {"ring", "full", "best_to_worst"}
+        Network topology for migration. Default ``"ring"``.
+    migration_selection : str
+        Which individuals to send (``"best"``). Default ``"best"``.
+    migration_replace : str
+        Which individuals to overwrite (``"worst"``). Default ``"worst"``.
+    llm_client : LLMClient, optional
+        Configured LLM client for Genetic Rescue (Phase 3).
+    llm_context : dict, optional
+        Per-population :class:`~symgene.llm.LLMContext` objects,
+        keyed by population name.
+    llm_rescue : bool
+        Enable Genetic Rescue. Default ``False``.
+    llm_rescue_fraction : float
+        Fraction of worst individuals replaced per rescue event. Default ``0.1``.
+    llm_rescue_trigger : {"stagnation", "random", "both"}
+        Condition that triggers rescue. Default ``"stagnation"``.
+    llm_rescue_level : {"gene", "individual"}
+        Granularity of rescue substitution. Default ``"gene"``.
+    llm_stagnation_patience : int
+        Generations without improvement before stagnation rescue triggers.
+        Default ``20``.
+    llm_rescue_prob : float
+        Probability of random rescue per generation (used with
+        ``trigger="random"`` or ``"both"``). Default ``0.1``.
+    llm_max_retries : int
+        Maximum LLM retry attempts per rescue event. Default ``3``.
+
+    Examples
+    --------
+    Single population (fastest setup):
+
+    >>> import numpy as np
+    >>> from symgene import PrimitiveSet, Population, SymGeneEvolver, FitnessEvaluator
+    >>> from symgene.metrics.regression import mse
+    >>> rng = np.random.default_rng(1)
+    >>> X = rng.standard_normal((50, 2))
+    >>> y = X[:, 0] + X[:, 1]
+    >>> pset = PrimitiveSet(n_inputs=2).add_from_catalog(["add", "mul"])
+    >>> pop = Population("demo", pset, n_genes=2, pop_size=10,
+    ...                  fitness=FitnessEvaluator(metric=mse))
+    >>> evolver = SymGeneEvolver([pop], n_gen=3, seed=0, verbose=0)
+    >>> result = evolver.fit(X, {"demo": y})
+    >>> "demo" in result
+    True
+    """
+
     def __init__(
         self,
         populations: list[Population],
@@ -87,6 +171,25 @@ class SymGeneEvolver:
         X_val: np.ndarray | None = None,
         y_val: dict[str, np.ndarray] | None = None,
     ) -> SymGeneResult:
+        """Run the evolutionary loop and return fitted results.
+
+        Parameters
+        ----------
+        X : np.ndarray of shape (n_samples, n_features)
+            Training input matrix, shared across all populations.
+        y : dict of str to np.ndarray
+            Mapping ``{population_name: target_array}`` for each population.
+        X_val : np.ndarray, optional
+            Validation inputs for tracking ``val_r2`` per generation.
+        y_val : dict of str to np.ndarray, optional
+            Validation targets. Required if ``X_val`` is given.
+
+        Returns
+        -------
+        SymGeneResult
+            Dict-like object mapping population name to
+            :class:`~symgene.results.PopulationResult`.
+        """
         if self.seed is not None:
             random.seed(self.seed)
             np.random.seed(self.seed)
@@ -198,6 +301,7 @@ class SymGeneEvolver:
         })
 
     def _evolve_population(self, pop: Population, X: np.ndarray, y: np.ndarray) -> None:
+        """Apply one generation of selection, crossover, and mutation to ``pop``."""
         assert pop._toolbox is not None
         tb = pop._toolbox
         n_elite = pop.n_elite
@@ -231,6 +335,7 @@ class SymGeneEvolver:
         pop._population[:] = offspring + elite
 
     def _interpop_step(self, X: np.ndarray, y: dict[str, np.ndarray]) -> None:
+        """Perform inter-population crossover events between all population pairs."""
         from symgene.operators.crossover import interpop_crossover
         pairs = [
             (self.populations[i], self.populations[j])
@@ -250,6 +355,10 @@ class SymGeneEvolver:
                 )
 
     def _predict_individual(self, ind: Any, pop: Population, X: np.ndarray) -> np.ndarray | None:
+        """Compile and evaluate ``ind`` on ``X`` using ``pop``'s DEAP pset.
+
+        Returns ``None`` if the individual is invalid or compilation fails.
+        """
         if ind is None or not hasattr(ind, '_combiner'):
             return None
         try:
@@ -318,6 +427,7 @@ class SymGeneEvolver:
         return False  # LLM still active
 
     def _save_checkpoint(self, gen: int) -> None:
+        """Serialize the full evolver state to ``checkpoint_dir/gen_NNNN.sgk``."""
         import os
         assert self.checkpoint_dir is not None
         try:
@@ -333,6 +443,18 @@ class SymGeneEvolver:
 
     @classmethod
     def resume(cls, path: str) -> "SymGeneEvolver":
+        """Load an evolver previously saved by :meth:`_save_checkpoint`.
+
+        Parameters
+        ----------
+        path : str
+            Path to a ``.sgk`` checkpoint file.
+
+        Returns
+        -------
+        SymGeneEvolver
+            Deserialized evolver instance.
+        """
         import pickle
         with open(path, "rb") as f:
             return pickle.load(f)
