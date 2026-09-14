@@ -34,6 +34,72 @@ if not hasattr(creator, "SGIndividual"):
 
 
 class Population:
+    """Single evolutionary population of multi-gene GP individuals.
+
+    Manages the DEAP toolbox, individual initialization, fitness evaluation,
+    and scheduling of hyperparameter changes over generations. Multiple
+    ``Population`` instances can be combined in a
+    :class:`~symgene.SymGeneEvolver` for island-model evolution.
+
+    Parameters
+    ----------
+    name : str
+        Unique identifier for this population. Used as the key in
+        :class:`~symgene.SymGeneResult`.
+    pset : PrimitiveSet
+        Configured primitive set defining the search space.
+    n_genes : int
+        Initial number of gene trees per individual. Default ``8``.
+    n_genes_max : int
+        Maximum genes allowed after gene-addition mutations. Default ``30``.
+    pop_size : int
+        Number of individuals in the population. Default ``100``.
+    tree_min : int
+        Minimum total node count per individual (soft constraint). Default ``50``.
+    tree_max : int
+        Maximum total node count per individual (hard constraint). Default ``80``.
+    height_max : int
+        Maximum tree height used during mutation. Default ``8``.
+    tree_init_max : int, optional
+        Maximum tree height used during initialization. Defaults to
+        ``height_max``.
+    combiner : {"ridge", "lasso", "linear"}
+        Strategy for combining gene outputs into a single prediction.
+        Default ``"ridge"``.
+    ridge_alphas : list of float, optional
+        Regularization candidates for ``RidgeCombiner``/``LassoCombiner``.
+        Default ``[1.0, 5.0, 10.0]``.
+    regression_degree : int
+        Polynomial degree applied to the gene-output matrix before fitting
+        the combiner. Default ``1`` (linear in gene outputs).
+    fitness : FitnessEvaluator, optional
+        Fitness function wrapper. Defaults to ``FitnessEvaluator(metric=mse)``.
+    selection : Any, optional
+        Selection operator. Defaults to
+        ``TournamentSelection(size=max(2, int(0.05 * pop_size)))``.
+    elite_ratio : float
+        Fraction of population preserved as elites each generation.
+        Default ``0.025``.
+    cxpb : float
+        Intra-individual crossover probability per pair. Default ``0.975``.
+    cxpb_low : float
+        Per-gene crossover probability within intra-individual crossover.
+        Default ``0.5``.
+    mutpb : float
+        Overall mutation probability per individual. Default ``0.2``.
+    mutpb_low : float
+        Per-gene mutation probability within overall mutation. Default ``0.2``.
+    mutation_weights : list of float, optional
+        Relative weights for the three mutation operators
+        ``[point, subtree, gene_add]``. Default ``[1.0, 1.0, 1.2]``.
+    schedule : dict, optional
+        Generation-based hyperparameter schedule. Example::
+
+            schedule={"cxpb": {100: 0.5, 150: 0.3}}
+
+        sets ``cxpb=0.5`` from generation 100 and ``cxpb=0.3`` from 150.
+    """
+
     def __init__(
         self,
         name: str,
@@ -87,6 +153,15 @@ class Population:
         self.history: list[dict[str, Any]] = []
 
     def initialize(self, seed: int | None = None) -> None:
+        """Build the DEAP toolbox and create the initial population.
+
+        Must be called before :meth:`evaluate` or any evolution step.
+
+        Parameters
+        ----------
+        seed : int, optional
+            Random seed applied before population generation.
+        """
         if seed is not None:
             random.seed(seed)
         self._deap_pset = self.pset.build()
@@ -132,6 +207,18 @@ class Population:
         ))
 
     def evaluate(self, X: np.ndarray, y: np.ndarray) -> None:
+        """Evaluate fitness for all individuals and update the Hall of Fame.
+
+        Individuals that raise exceptions during evaluation receive a
+        fitness of ``1e9`` (worst possible) and are silently discarded.
+
+        Parameters
+        ----------
+        X : np.ndarray of shape (n_samples, n_features)
+            Input matrix.
+        y : np.ndarray of shape (n_samples,)
+            Target values.
+        """
         combiner_kwargs: dict[str, Any] = {"degree": self.regression_degree}
         if self.combiner_name in ("ridge", "lasso"):
             combiner_kwargs["alphas"] = self.ridge_alphas
@@ -164,6 +251,13 @@ class Population:
             ind.fitness.values = (1e9,)
 
     def apply_schedule(self, generation: int) -> None:
+        """Apply generation-based hyperparameter updates from :attr:`schedule`.
+
+        Parameters
+        ----------
+        generation : int
+            Current generation index (0-based).
+        """
         for param, timeline in self.schedule.items():
             for gen_key in sorted(timeline.keys()):
                 if generation >= gen_key:
@@ -171,8 +265,10 @@ class Population:
 
     @property
     def best(self) -> Any:
+        """Best individual found so far (Hall of Fame rank-0), or ``None``."""
         return self._hof[0] if self._hof else None
 
     @property
     def n_elite(self) -> int:
+        """Number of elite individuals preserved each generation."""
         return max(1, int(self.elite_ratio * self.pop_size))
