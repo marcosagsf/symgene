@@ -11,6 +11,19 @@ except ImportError:
 
 
 class PopulationResult:
+    """Results and analysis tools for one evolved population.
+
+    Produced by :meth:`~symgene.SymGeneEvolver.fit`; accessed via
+    ``result["population_name"]``.
+
+    Attributes
+    ----------
+    history_ : list of dict
+        Per-generation log entries with keys ``gen``, ``train_mse``,
+        ``mean_train_mse``, ``std_train_mse``, ``n_genes``, and optionally
+        ``val_r2``.
+    """
+
     def __init__(self, population: Any, history: list[dict[str, Any]], evolver: Any) -> None:
         self._pop = population
         self._evolver = evolver
@@ -18,27 +31,35 @@ class PopulationResult:
 
     @property
     def best_individual_(self):
+        """Best individual found across all generations (Hall of Fame rank-0)."""
         return self._pop.best
 
     @property
     def best_expression_(self) -> str:
+        """String representation of the best individual's genes, joined by \" | \"."""
         ind = self.best_individual_
         if ind is None: return ""
         return " | ".join(str(gene) for gene in ind)
 
     @property
     def n_genes_(self) -> int:
+        """Number of gene trees in the best individual."""
         ind = self.best_individual_
         return len(ind) if ind is not None else 0
 
     @property
     def coefficients_(self) -> np.ndarray | None:
+        """Linear combination weights for the best individual's genes.
+
+        Returns ``None`` if no individual has been evaluated yet.
+        """
         ind = self.best_individual_
         if ind is None or not hasattr(ind, '_combiner'): return None
         return ind._combiner.coef_
 
     @property
     def best_fitness_(self) -> float:
+        """Fitness score of the best individual (lower is better)."""
         ind = self.best_individual_
         return ind.fitness.values[0] if ind is not None else float('inf')
 
@@ -49,6 +70,20 @@ class PopulationResult:
         return self.best_expression_
 
     def to_sympy(self) -> list[Any]:
+        """Convert the best individual's gene trees to SymPy expressions.
+
+        Returns
+        -------
+        list of sympy.Expr
+            One SymPy expression per gene. Returns an empty list if the
+            best individual is ``None`` or conversion fails.
+
+        Warns
+        -----
+        UserWarning
+            If any primitive lacks a ``sympy_fn`` mapping (registered via
+            :meth:`PrimitiveSet.add_custom`).
+        """
         try:
             import sympy as sp
             import deap.gp as gp
@@ -113,6 +148,17 @@ class PopulationResult:
         return self.best_expression_
 
     def to_callable(self) -> Callable[[np.ndarray], np.ndarray] | None:
+        """Return a standalone Python callable wrapping the best individual.
+
+        The returned function has the same behaviour as :meth:`predict` but
+        does not hold a reference to the Population or Evolver — useful for
+        exporting the model.
+
+        Returns
+        -------
+        Callable[[np.ndarray], np.ndarray] or None
+            Function ``f(X) -> y_pred``, or ``None`` if no individual exists.
+        """
         ind = self.best_individual_
         pop = self._pop
         if ind is None: return None
@@ -284,7 +330,19 @@ class PopulationResult:
 
 
 class SymGeneResult(dict):
-    """Dict-like container: results["population_name"] -> PopulationResult."""
+    """Dict-like container mapping population names to their results.
+
+    Returned by :meth:`~symgene.SymGeneEvolver.fit`. Inherits ``dict``,
+    so population results are accessed as ``result["population_name"]``.
+
+    Examples
+    --------
+    >>> result["PPF"].best_fitness_   # doctest: +SKIP
+    0.00123
+    >>> result["PPF"].to_latex()      # doctest: +SKIP
+    'x_{1}^{2} + \\\\sin{x_{2}}'
+    >>> result.save("/tmp/my_result") # doctest: +SKIP
+    """
 
     def interpret(
         self,
@@ -341,11 +399,30 @@ class SymGeneResult(dict):
         return out
 
     def save(self, path: str):
+        """Serialize this result to ``path/result.sgr`` using dill.
+
+        Parameters
+        ----------
+        path : str
+            Directory path (created if it does not exist).
+        """
         os.makedirs(path, exist_ok=True)
         with open(os.path.join(path, "result.sgr"), "wb") as f:
             pickle.dump(self, f)
 
     @classmethod
     def load(cls, path: str) -> "SymGeneResult":
+        """Deserialize a result saved by :meth:`save`.
+
+        Parameters
+        ----------
+        path : str
+            Directory containing ``result.sgr``.
+
+        Returns
+        -------
+        SymGeneResult
+            Loaded result object.
+        """
         with open(os.path.join(path, "result.sgr"), "rb") as f:
             return pickle.load(f)
