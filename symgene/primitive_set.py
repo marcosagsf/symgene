@@ -7,6 +7,38 @@ from symgene.primitives.catalog import get_catalog, STANDARD
 from symgene.primitives.sympy_map import CATALOG_SYMPY
 
 class PrimitiveSet:
+    """Registry of mathematical primitives and terminal symbols for MGGP.
+
+    Builds the search space for symbolic regression by collecting primitive
+    functions (operators), ephemeral constants (random terminals), and an
+    optional output squash function. Call :meth:`build` to compile into a
+    DEAP ``PrimitiveSet`` ready for evolution.
+
+    Parameters
+    ----------
+    n_inputs : int
+        Number of input variables (features).
+    feature_names : list of str, optional
+        Human-readable names for each input variable. Length must equal
+        ``n_inputs``. Defaults to ``["x1", "x2", ...]``.
+
+    Raises
+    ------
+    ValueError
+        If ``feature_names`` is provided but its length differs from
+        ``n_inputs``.
+
+    Examples
+    --------
+    >>> from symgene import PrimitiveSet
+    >>> pset = PrimitiveSet(n_inputs=2, feature_names=["Re", "Pr"])
+    >>> pset.add_from_catalog(["add", "mul", "sin", "cos"])
+    PrimitiveSet(n_inputs=2, primitives=4)
+    >>> deap_pset = pset.build()
+    >>> deap_pset.arity
+    2
+    """
+
     def __init__(
         self,
         n_inputs: int,
@@ -27,7 +59,24 @@ class PrimitiveSet:
         self.squash: Squash | None = None
         self._custom: list[tuple] = []
 
+    def __repr__(self) -> str:
+        return f"PrimitiveSet(n_inputs={self.n_inputs}, primitives={len(self.primitives)})"
+
     def add_from_catalog(self, names: list[str] | None = None) -> "PrimitiveSet":
+        """Load primitives from the built-in catalog.
+
+        Parameters
+        ----------
+        names : list of str, optional
+            Catalog keys to load (e.g. ``["add", "mul", "sin"]``). Defaults
+            to the ``STANDARD`` preset defined in
+            ``symgene.primitives.catalog``.
+
+        Returns
+        -------
+        PrimitiveSet
+            ``self``, for method chaining.
+        """
         selected = names if names is not None else STANDARD
         sq = self.squash if self.squash is not None else Squash()
         fns = get_catalog(selected, sq)
@@ -45,14 +94,40 @@ class PrimitiveSet:
         name: str,
         sympy_fn: Callable | None = None,
     ) -> "PrimitiveSet":
-        """Register a custom primitive.
+        """Register a user-defined primitive function.
 
         Parameters
         ----------
-        sympy_fn:
-            Lambda recebendo argumentos sympy e retornando uma expressão sympy.
-            Necessário para que to_sympy() / to_latex() funcionem com esta primitiva.
-            Se None, to_sympy() emitirá UserWarning ao encontrar esta primitiva.
+        fn : Callable
+            The primitive function. Must accept exactly ``arity`` positional
+            float arguments and return a float.
+        arity : int
+            Number of arguments that ``fn`` expects.
+        name : str
+            Unique string identifier used in evolved expressions.
+        sympy_fn : Callable or None, optional
+            Lambda that accepts ``arity`` SymPy arguments and returns a SymPy
+            expression. Required for :meth:`PopulationResult.to_sympy` and
+            :meth:`PopulationResult.to_latex` to work with this primitive.
+            If ``None``, those methods will emit a ``UserWarning`` when the
+            primitive appears in the best individual.
+
+        Returns
+        -------
+        PrimitiveSet
+            ``self``, for method chaining.
+
+        Examples
+        --------
+        >>> from symgene import PrimitiveSet
+        >>> pset = PrimitiveSet(n_inputs=1, feature_names=["x"])
+        >>> pset.add_custom(
+        ...     fn=lambda x: x ** 3,
+        ...     arity=1,
+        ...     name="cube",
+        ...     sympy_fn=lambda x: x ** 3,
+        ... )
+        PrimitiveSet(n_inputs=1, primitives=1)
         """
         self.primitives.append((fn, arity, name, sympy_fn))
         return self
@@ -66,6 +141,40 @@ class PrimitiveSet:
         low: float = -1.0, high: float = 1.0,
         mean: float = 0.0, std: float = 1.0, n: int = 1,
     ) -> "PrimitiveSet":
+        """Add random constant terminal(s) sampled at tree-generation time.
+
+        Each ephemeral becomes a leaf node whose value is drawn from the
+        specified distribution every time a new tree is created.
+
+        Parameters
+        ----------
+        name : str
+            Base name for the ephemeral. If ``n > 1``, terminals are named
+            ``name_0``, ``name_1``, … ``name_{n-1}``.
+        dist : {"uniform", "normal"}
+            Sampling distribution.
+        low : float
+            Lower bound (uniform only). Default ``-1.0``.
+        high : float
+            Upper bound (uniform only). Default ``1.0``.
+        mean : float
+            Mean (normal only). Default ``0.0``.
+        std : float
+            Standard deviation (normal only). Default ``1.0``.
+        n : int
+            Number of independent ephemeral constants to register.
+            Default ``1``.
+
+        Returns
+        -------
+        PrimitiveSet
+            ``self``, for method chaining.
+
+        Raises
+        ------
+        ValueError
+            If ``dist`` is not ``"uniform"`` or ``"normal"``.
+        """
         self.ephemerals.append({
             "name": name, "dist": dist,
             "low": low, "high": high,
@@ -80,10 +189,38 @@ class PrimitiveSet:
         scale: float = 2.0,
         fn: Callable | None = None,
     ) -> "PrimitiveSet":
+        """Configure the output squashing function applied to gene outputs.
+
+        Squashing bounds extreme values before they reach the combiner,
+        preventing numerical overflow during evolution.
+
+        Parameters
+        ----------
+        lim : float
+            Symmetric soft-clamp limit. Default ``8.0``.
+        alpha : float
+            Slope beyond the limit (leaky region). Default ``0.1``.
+        scale : float
+            Overall scaling factor. Default ``2.0``.
+        fn : Callable or None
+            Custom squash function overriding the built-in soft-clamp.
+
+        Returns
+        -------
+        PrimitiveSet
+            ``self``, for method chaining.
+        """
         self.squash = Squash(lim=lim, alpha=alpha, scale=scale, fn=fn)
         return self
 
     def disable_squash(self) -> "PrimitiveSet":
+        """Remove the squash function so gene outputs are passed raw.
+
+        Returns
+        -------
+        PrimitiveSet
+            ``self``, for method chaining.
+        """
         self.squash = None
         return self
 
@@ -167,7 +304,22 @@ class PrimitiveSet:
         return pset
 
     def build(self) -> gp.PrimitiveSet:
-        """Compile into a DEAP PrimitiveSet ready for evolution."""
+        """Compile into a DEAP ``PrimitiveSet`` ready for evolution.
+
+        Renames the default ``ARG0..N`` terminals to :attr:`feature_names`,
+        registers all primitives and ephemerals, and returns the compiled
+        DEAP object. Called internally by :class:`~symgene.Population`.
+
+        Returns
+        -------
+        deap.gp.PrimitiveSet
+            Configured DEAP primitive set.
+
+        Raises
+        ------
+        ValueError
+            If any ephemeral uses an unknown distribution.
+        """
         deap_pset = gp.PrimitiveSet("MAIN", self.n_inputs)
 
         # rename ARG0..N to feature names
