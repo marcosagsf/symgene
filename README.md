@@ -1,6 +1,8 @@
 # SymGene
 
 [![Tests](https://github.com/marcosagsf/symgene/actions/workflows/tests.yml/badge.svg)](https://github.com/marcosagsf/symgene/actions/workflows/tests.yml)
+[![PyPI](https://img.shields.io/pypi/v/symgene.svg)](https://pypi.org/project/symgene/)
+[![Python](https://img.shields.io/pypi/pyversions/symgene.svg)](https://pypi.org/project/symgene/)
 
 **Multi-Gene Genetic Programming (MGGP) library for symbolic regression, surrogate-assisted optimization, and LLM-guided evolution.**
 
