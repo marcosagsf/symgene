@@ -247,7 +247,14 @@ class Population:
             ind.fitness.values = (fitness_val,)
             ind._combiner = combiner
             ind._gene_outputs_std = G.std(axis=0)
-        except Exception:
+        except Exception as exc:
+            import warnings
+            warnings.warn(
+                f"Individual evaluation failed ({type(exc).__name__}: {exc}); "
+                "assigning worst fitness.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
             ind.fitness.values = (1e9,)
 
     def apply_schedule(self, generation: int) -> None:

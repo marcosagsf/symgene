@@ -33,8 +33,18 @@ class LassoCombiner(BaseCombiner):
         self._model.fit(features, y)
         self.coef_ = self._model.coef_.flatten()
         self.bias_ = float(self._model.intercept_)
-        self.gene_weights_ = np.abs(self.coef_[:G.shape[1]])
+        self._compute_gene_weights(G.shape[1])
         return self
+
+    def _compute_gene_weights(self, n_genes: int) -> None:
+        if self.degree > 1 and self._poly is not None:
+            weights = np.zeros(n_genes)
+            for gi in range(n_genes):
+                mask = self._poly.powers_[:, gi] > 0
+                weights[gi] = np.abs(self.coef_[mask]).sum()
+            self.gene_weights_ = weights
+        else:
+            self.gene_weights_ = np.abs(self.coef_)
 
     def predict(self, G: np.ndarray) -> np.ndarray:
         return self._model.predict(self._featurize(G))

@@ -153,6 +153,13 @@ class SymGeneEvolver:
         self.llm_stagnation_patience = llm_stagnation_patience
         self.llm_rescue_prob = llm_rescue_prob
         self.llm_max_retries = llm_max_retries
+        if n_jobs != 1:
+            import warnings
+            warnings.warn(
+                "n_jobs != 1 is not yet implemented; evolution will run sequentially.",
+                UserWarning,
+                stacklevel=2,
+            )
 
     def _build_logs(self, gen: int, pop_histories: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
         logs = {"gen": gen}
@@ -302,7 +309,11 @@ class SymGeneEvolver:
 
     def _evolve_population(self, pop: Population, X: np.ndarray, y: np.ndarray) -> None:
         """Apply one generation of selection, crossover, and mutation to ``pop``."""
-        assert pop._toolbox is not None
+        if pop._toolbox is None:
+            raise RuntimeError(
+                f"Population '{pop.name}' toolbox is not initialised. "
+                "Call Population.initialize() before fitting."
+            )
         tb = pop._toolbox
         n_elite = pop.n_elite
         elite = list(map(tb.clone, tools.selBest(pop._population, n_elite)))
@@ -455,6 +466,9 @@ class SymGeneEvolver:
         SymGeneEvolver
             Deserialized evolver instance.
         """
-        import pickle
+        try:
+            import dill as _pickle
+        except ImportError:
+            import pickle as _pickle
         with open(path, "rb") as f:
-            return pickle.load(f)
+            return _pickle.load(f)

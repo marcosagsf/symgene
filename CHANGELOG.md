@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**AIGuidedEvolver — LLM inside the evolutionary loop**
+- `AIGuidedEvolver` — drop-in replacement for `SymGeneEvolver` that monitors evolution and calls the LLM advisor when configurable trigger conditions are met (`symgene/advisor/guided_evolver.py`)
+- `StagnationTrigger` — fires when best fitness has not improved for `patience` generations
+- `DiversityTrigger` — fires when population genotypic diversity drops below a threshold
+- `BloatTrigger` — fires when average tree size exceeds a maximum
+- `LowPerformanceTrigger` — fires when validation R² is below `target_r2` within the first `max_gen` generations (catches early convergence to power-law attractors)
+- `EvolutionMonitor` / `MonitorSnapshot` — lightweight observers for fitness, diversity, and bloat metrics per generation
+- Available via `from symgene import AIGuidedEvolver, StagnationTrigger, DiversityTrigger, LowPerformanceTrigger` or `from symgene.advisor import ...`
+
 **Dittus-Boelter heat transfer benchmark**
 - `dittus_boelter()` — symbolic regression benchmark for the convective heat transfer correlation `Nu = 0.023·Re^0.8·Pr^0.4`; log-uniform LHS sampling over Re ∈ [10⁴, 10⁶] and Pr ∈ [0.7, 160]; returns `BenchmarkData` with `feature_names=["Re", "Pr"]`
 - `BenchmarkData` NamedTuple extended with optional `feature_names` field (backward-compatible default `None`)

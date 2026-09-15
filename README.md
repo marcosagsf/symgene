@@ -32,7 +32,7 @@ SymGene provides a modular, extensible framework for evolving interpretable clos
 pip install symgene
 ```
 
-To enable LLM features (Anthropic and/or OpenAI):
+To enable LLM features (Anthropic, OpenAI, or Gemini):
 
 ```bash
 pip install symgene[llm]
@@ -238,6 +238,8 @@ python examples/01_mggp_forrester_koza.py
 |---|---|
 | `SymGeneRegressor` | High-level sklearn-like regressor for single-population MGGP |
 | `SymGeneEvolver` | Low-level driver for multi-population co-evolution |
+| `AIGuidedEvolver` | LLM-guided evolver with triggers for stagnation, diversity, and low performance |
+| `StagnationTrigger` / `DiversityTrigger` / `LowPerformanceTrigger` | Trigger conditions for `AIGuidedEvolver` interventions |
 | `Population` | Encapsulates one population: genes, operators, fitness, selection |
 | `PrimitiveSet` | Manages mathematical primitives and terminal nodes |
 | `PrimitiveSet.from_description()` | Build a primitive set from a domain description via LLM *(requires `[llm]`)* |
@@ -251,7 +253,7 @@ python examples/01_mggp_forrester_koza.py
 
 | Class / Function | Description |
 |---|---|
-| `LLMClient` | Provider-agnostic LLM wrapper (Anthropic / OpenAI) |
+| `LLMClient` | Provider-agnostic LLM wrapper (Anthropic / OpenAI / Gemini) |
 | `LLMContext` | Library of natural-language concepts guiding LLM-assisted evolution |
 | `InsufficientContextError` | Raised when description is too vague for primitive selection |
 | `suggest_primitives()` | Ask LLM to select primitives for a given domain |
@@ -306,7 +308,7 @@ If you use SymGene in your research, please cite:
   title   = {SymGene: A Multi-Gene Genetic Programming Library for Symbolic Regression
              and Surrogate-Assisted Optimization},
   author  = {Filho, Marcos A. G. S.},
-  journal = {SoftwareX},
+  journal = {Journal of Open Source Software},
   year    = {2026},
 }
 ```

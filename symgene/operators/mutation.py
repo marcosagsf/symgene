@@ -45,16 +45,3 @@ def mutate_population(
         population[i] = individual
 
     return population, low_mut, high_mut, add_ops, rem_ops, rep_ops
-
-
-def evolutive_pressure(population, toolbox, replace_ratio: float = 0.3):
-    """Replace worst individuals with fresh random ones, keeping elite."""
-    n_replace = int(replace_ratio * len(population))
-    from deap.tools import selBest, selWorst
-    elite = selBest(population, 1)
-    worst = set(id(ind) for ind in selWorst(population, n_replace))
-    population = [ind for ind in population if id(ind) not in worst]
-    population.extend(toolbox.individual() for _ in range(n_replace))
-    if id(elite[0]) not in {id(ind) for ind in population}:
-        population[0] = elite[0]
-    return population

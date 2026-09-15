@@ -9,6 +9,6 @@ def make_trigonometric(squash: Squash) -> dict:
         try: return squash(math.tan(v))
         except: return 0.0
     def atan(x):   return squash(math.atan(squash(x)))
-    def asin(x):   return squash(math.asin(max(-1.0, min(1.0, squash(x) / max(1.0, abs(squash(x)))))))
-    def acos(x):   return squash(math.acos(max(-1.0, min(1.0, squash(x) / max(1.0, abs(squash(x)))))))
+    def asin(x):   return squash(math.asin(max(-1.0, min(1.0, squash(x)))))
+    def acos(x):   return squash(math.acos(max(-1.0, min(1.0, squash(x)))))
     return {"sin": sin, "cos": cos, "tan": tan, "atan": atan, "asin": asin, "acos": acos}

@@ -131,7 +131,13 @@ class PopulationResult:
                 expr, _ = _eval(list(gene), 0)
                 exprs.append(expr)
             return exprs
-        except Exception:
+        except Exception as exc:
+            import warnings
+            warnings.warn(
+                f"to_sympy() failed ({type(exc).__name__}: {exc}); returning empty list.",
+                UserWarning,
+                stacklevel=2,
+            )
             return []
 
     def to_latex(self) -> str:
@@ -143,8 +149,14 @@ class PopulationResult:
                 result = " + ".join(p for p in parts if p)
                 if result:
                     return result
-        except Exception:
-            pass
+        except Exception as exc:
+            import warnings
+            warnings.warn(
+                f"to_latex() failed ({type(exc).__name__}: {exc}); "
+                "falling back to best_expression_.",
+                UserWarning,
+                stacklevel=2,
+            )
         return self.best_expression_
 
     def to_callable(self) -> Callable[[np.ndarray], np.ndarray] | None:
@@ -176,7 +188,7 @@ class PopulationResult:
         fitness = [h["train_mse"] for h in self.history_]
         fig, ax_ = (None, ax) if ax else plt.subplots()
         ax_.plot(gens, fitness, label="train_mse")
-        if self.history_ and "val_r2" in self.history_[0]:
+        if self.history_ and any("val_r2" in h for h in self.history_):
             val_r2: list[Any] = [h.get("val_r2") for h in self.history_]
             ax2 = ax_.twinx()
             ax2.plot(gens, val_r2, color="orange", label="val_r2")

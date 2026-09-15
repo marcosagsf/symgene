@@ -1,3 +1,4 @@
+import inspect
 import random
 from functools import partial
 from typing import Any, Callable
@@ -80,7 +81,6 @@ class PrimitiveSet:
         selected = names if names is not None else STANDARD
         sq = self.squash if self.squash is not None else Squash()
         fns = get_catalog(selected, sq)
-        import inspect
         for name, fn in fns.items():
             arity = len(inspect.signature(fn).parameters)
             sympy_fn = CATALOG_SYMPY.get(name)
@@ -133,7 +133,7 @@ class PrimitiveSet:
         return self
 
     def sympy_registry(self) -> dict[str, Any]:
-        """Retorna {name: sympy_fn} para todas as primitivas registradas."""
+        """Return ``{name: sympy_fn}`` for all registered primitives."""
         return {name: sfn for _, _, name, sfn in self.primitives}
 
     def add_ephemeral(

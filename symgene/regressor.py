@@ -256,6 +256,10 @@ class SymGeneRegressor:
         return self
 
     def __getattr__(self, name: str):
-        if name.startswith("_") or self._result is None:
+        if name.startswith("_"):
             raise AttributeError(name)
+        if self._result is None:
+            raise AttributeError(
+                f"'{name}' is not available before fitting. Call fit() first."
+            )
         return getattr(self._result, name)

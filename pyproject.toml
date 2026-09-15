@@ -8,7 +8,7 @@ version = "0.2.0"
 description = "Multi-Gene Genetic Programming library for symbolic regression, surrogate-assisted optimization, and LLM-guided evolution"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Marcos Filho", email = "marcosagsf@gmail.com"},
 ]
@@ -48,6 +48,7 @@ dev = ["pytest>=7.4", "pytest-cov"]
 llm = ["anthropic>=0.34", "openai>=1.0", "google-genai>=1.0"]
 
 [project.urls]
+Homepage = "https://github.com/marcosagsf/symgene"
 Repository = "https://github.com/marcosagsf/symgene"
 Issues = "https://github.com/marcosagsf/symgene/issues"
 
