@@ -37,6 +37,21 @@ def test_population_evaluate_sets_fitness():
     for ind in pop._population:
         assert ind.fitness.valid
 
+def test_population_n_genes_1_individual_shape():
+    pop = Population(name="test", pset=make_pset(), n_genes=1, pop_size=10,
+                     fitness=FitnessEvaluator(metric=mse), combiner="ridge")
+    pop.initialize()
+    for ind in pop._population:
+        assert len(ind) == 1
+
+def test_population_n_genes_1_evaluate():
+    pop = Population(name="test", pset=make_pset(), n_genes=1, pop_size=10,
+                     fitness=FitnessEvaluator(metric=mse), combiner="ridge")
+    pop.initialize()
+    pop.evaluate(X, y)
+    for ind in pop._population:
+        assert ind.fitness.valid
+
 def test_population_schedule_applies():
     pop = Population(
         name="test", pset=make_pset(), n_genes=3, pop_size=10,

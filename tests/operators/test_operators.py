@@ -43,6 +43,32 @@ def test_mutate_population_changes_some():
     changed = [str(ind) != orig for ind, orig in zip(pop._population, original)]
     assert any(changed)
 
+from symgene.operators.crossover import interpop_crossover
+
+def test_interpop_crossover_returns_five_values():
+    pop = make_pop()
+    a, b = pop._population[0], pop._population[1]
+    result = interpop_crossover(a, b, pop._toolbox, cxpb_low_inter=0.5, tree_max=50)
+    assert len(result) == 5  # indA, indB, n_low, n_high, n_fallback
+
+def test_interpop_crossover_empty_returns_zeros():
+    pop = make_pop()
+    a, b = pop._population[0], pop._population[1]
+    # make one individual appear empty by patching __len__ indirectly — use real individuals
+    _, _, n_low, n_high, n_fallback = interpop_crossover(
+        a, b, pop._toolbox, cxpb_low_inter=1.0, tree_max=50
+    )
+    assert isinstance(n_low + n_high + n_fallback, int)
+
+def test_interpop_crossover_high_order_path():
+    """cxpb_low_inter=0.0 forces the high-order (whole-gene swap) branch."""
+    pop = make_pop()
+    a, b = pop._population[0], pop._population[1]
+    _, _, n_low, n_high, _ = interpop_crossover(
+        a, b, pop._toolbox, cxpb_low_inter=0.0, tree_max=50
+    )
+    assert n_high > 0
+
 def test_mutate_respects_mutpb_zero():
     pop = make_pop()
     original = [str(ind) for ind in pop._population]

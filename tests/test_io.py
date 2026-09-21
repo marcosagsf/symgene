@@ -74,6 +74,22 @@ def test_checkpoint_uses_dill(tmp_path):
     assert hasattr(loaded_evolver, "populations")
 
 
+def test_checkpoint_save_and_load_direct(tmp_path):
+    """Direct calls to io.checkpoint.save_checkpoint and load_checkpoint."""
+    from symgene.io.checkpoint import save_checkpoint, load_checkpoint
+    from symgene import PrimitiveSet, Population, SymGeneEvolver
+    from symgene.primitives import STANDARD
+    pset = PrimitiveSet(n_inputs=2)
+    pset.add_from_catalog(STANDARD)
+    pop = Population("p", pset, n_genes=2, pop_size=5, n_genes_max=4)
+    evolver = SymGeneEvolver(populations=[pop], n_gen=1, verbose=0)
+    evolver.checkpoint_dir = str(tmp_path)
+    path = save_checkpoint(evolver, gen=5)
+    assert path.endswith("gen_0005.sgk")
+    loaded = load_checkpoint(path)
+    assert hasattr(loaded, "populations")
+
+
 def test_load_checkpoint():
     from symgene.io import load_checkpoint
     import dill, tempfile, os

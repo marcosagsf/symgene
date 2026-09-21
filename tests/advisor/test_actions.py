@@ -91,3 +91,169 @@ def test_force_migration_single_pop_returns_zero_affected():
     result = executor.execute(_diag("force_migration"), pop, gen=10)
     assert result["action"] == "force_migration"
     assert result["n_affected"] == 0
+
+
+def test_unknown_action_fallback():
+    executor = ActionExecutor(client=None)
+    pop = _make_pop()
+    result = executor.execute(_diag("unknown_action_xyz"), pop, gen=5)
+    assert result["action"] == "unknown_action_xyz"
+    assert result["n_affected"] == 0
+
+
+def test_adjust_parameters_cxpb_and_cxpb_low():
+    executor = ActionExecutor(client=None)
+    pop = _make_pop()
+    pop.cxpb = 0.8
+    pop.cxpb_low = 0.4
+    result = executor.execute(
+        _diag("adjust_parameters", {"cxpb": 0.95, "cxpb_low": 0.6}), pop, gen=5
+    )
+    assert pop.cxpb == 0.95
+    assert pop.cxpb_low == 0.6
+    assert "cxpb" in result["changes"]
+    assert "cxpb_low" in result["changes"]
+
+
+def test_adjust_parameters_elite_ratio():
+    executor = ActionExecutor(client=None)
+    pop = _make_pop()
+    pop.elite_ratio = 0.05
+    result = executor.execute(
+        _diag("adjust_parameters", {"elite_ratio": 0.08}), pop, gen=5
+    )
+    assert pop.elite_ratio == pytest.approx(0.08)
+
+
+def test_suggest_primitive_missing_name():
+    executor = ActionExecutor(client=None)
+    pop = _make_pop()
+    result = executor.execute(
+        _diag("suggest_primitive", {"lambda_str": "lambda x: x**2"}), pop, gen=5
+    )
+    assert result["action"] == "suggest_primitive"
+    assert result["n_affected"] == 0
+    assert "missing" in result["reason"]
+
+
+def test_suggest_primitive_bad_lambda():
+    executor = ActionExecutor(client=None)
+    pop = _make_pop()
+    result = executor.execute(
+        _diag("suggest_primitive", {"name": "bad_fn", "lambda_str": "invalid"}),
+        pop, gen=5
+    )
+    assert result["action"] == "suggest_primitive"
+    assert result["n_affected"] == 0
+
+
+from symgene.advisor.actions import (
+    _deap_fn_names, _deap_var_names, _deap_ephemeral_names, _build_top_context,
+    _fix_ephemerals,
+)
+from symgene.primitive_set import PrimitiveSet
+from symgene.population import Population
+
+
+def _real_pop():
+    pset = PrimitiveSet(n_inputs=2, feature_names=["x1", "x2"])
+    pset.add_from_catalog(["add", "sin"])
+    pop = Population(name="p", pset=pset, n_genes=2, pop_size=10)
+    pop.initialize(seed=0)
+    return pop
+
+
+def test_deap_fn_names_nonempty():
+    pop = _real_pop()
+    names = _deap_fn_names(pop)
+    assert "add" in names
+
+
+def test_deap_var_names_nonempty():
+    pop = _real_pop()
+    names = _deap_var_names(pop)
+    assert "x1" in names or "ARG0" in names  # DEAP may rename to ARG0/ARG1
+
+
+def test_deap_ephemeral_names():
+    pop = _real_pop()
+    names = _deap_ephemeral_names(pop)
+    assert isinstance(names, list)
+
+
+def test_build_top_context_with_evaluated_pop():
+    import numpy as np
+    from symgene.fitness import FitnessEvaluator
+    from symgene.metrics.regression import mse
+    pset = PrimitiveSet(n_inputs=2, feature_names=["x1", "x2"])
+    pset.add_from_catalog(["add", "sin"])
+    pop = Population(name="p", pset=pset, n_genes=2, pop_size=10,
+                     fitness=FitnessEvaluator(metric=mse), combiner="ridge")
+    pop.initialize(seed=0)
+    rng = np.random.default_rng(0)
+    X = rng.standard_normal((20, 2))
+    y = X[:, 0] + X[:, 1]
+    pop.evaluate(X, y)
+    ctx = _build_top_context(pop, k=2)
+    assert isinstance(ctx, str)
+    assert len(ctx) > 0
+
+
+def test_suggest_primitive_valid_with_real_pop():
+    """A valid lambda with a real initialized population registers the primitive."""
+    pset = PrimitiveSet(n_inputs=2, feature_names=["x1", "x2"])
+    pset.add_from_catalog(["add", "sin"])
+    pop = Population(name="p", pset=pset, n_genes=2, pop_size=5)
+    pop.initialize(seed=0)
+    # Patch DEAP's addPrimitive to avoid DEAP internal state issues
+    pop._deap_pset.addPrimitive = MagicMock()
+    executor = ActionExecutor(client=None)
+    result = executor.execute(
+        _diag("suggest_primitive", {
+            "name": "mysquare",
+            "lambda_str": "lambda x: x * x",
+            "arity": 1,
+            "description": "square function",
+        }),
+        pop, gen=5,
+    )
+    assert result["action"] == "suggest_primitive"
+    assert result["n_affected"] == 1
+    assert result["name"] == "mysquare"
+
+
+def test_suggest_primitive_valid_arity2_no_squash():
+    """arity=2, no squash: goes through the no-squash branch for fn_final."""
+    pset = PrimitiveSet(n_inputs=2, feature_names=["x1", "x2"])
+    pset.add_from_catalog(["add"])
+    pset.disable_squash()
+    pop = Population(name="p", pset=pset, n_genes=2, pop_size=5)
+    pop.initialize(seed=0)
+    pop._deap_pset.addPrimitive = MagicMock()
+    executor = ActionExecutor(client=None)
+    result = executor.execute(
+        _diag("suggest_primitive", {
+            "name": "mymul",
+            "lambda_str": "lambda x, y: x * y",
+            "arity": 2,
+            "description": "multiply",
+        }),
+        pop, gen=5,
+    )
+    assert result["action"] == "suggest_primitive"
+    assert result["n_affected"] == 1
+
+
+def test_adjust_parameters_tournament_size():
+    executor = ActionExecutor(client=None)
+    pop = _make_pop()
+    pop.selection = MagicMock()
+    pop.selection.size = 5
+    result = executor.execute(
+        _diag("adjust_parameters", {"tournament_size": 3}), pop, gen=5
+    )
+    assert pop.selection.size == 3
+    assert "tournament_size" in result["changes"]
+
+
+import pytest

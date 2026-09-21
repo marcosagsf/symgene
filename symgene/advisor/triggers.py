@@ -33,3 +33,41 @@ class BloatTrigger(BaseTrigger):
 
     def evaluate(self, snapshot: MonitorSnapshot) -> bool:
         return snapshot.complexity_trend > self.complexity_growth
+
+
+class LowPerformanceTrigger(BaseTrigger):
+    """Fires when val_r2 < target_r2 during the first `max_gen` generations.
+
+    Unlike StagnationTrigger (which waits for a plateau), this trigger fires
+    during the *active improvement phase* when the model hasn't reached a
+    target quality yet. Useful for guiding the search early — before the GP
+    settles into a local attractor — on problems that converge quickly to a
+    decent-but-suboptimal solution.
+
+    Parameters
+    ----------
+    target_r2 : float
+        Fire while validation R² is below this value (default: 0.95).
+    max_gen : int
+        Stop firing after this generation — avoids interfering with late-stage
+        fine-tuning (default: 80).
+    min_gen : int
+        Minimum generation before the trigger is eligible (default: 3).
+    """
+
+    def __init__(
+        self,
+        target_r2: float = 0.95,
+        max_gen: int = 80,
+        min_gen: int = 3,
+    ) -> None:
+        self.target_r2 = target_r2
+        self.max_gen = max_gen
+        self.min_gen = min_gen
+
+    def evaluate(self, snapshot: MonitorSnapshot) -> bool:
+        if snapshot.gen < self.min_gen or snapshot.gen > self.max_gen:
+            return False
+        if snapshot.val_r2 is None:
+            return False
+        return float(snapshot.val_r2) < self.target_r2

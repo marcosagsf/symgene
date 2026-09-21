@@ -1,5 +1,7 @@
 from symgene.advisor.monitor import MonitorSnapshot
-from symgene.advisor.triggers import StagnationTrigger, DiversityTrigger, BloatTrigger
+from symgene.advisor.triggers import (
+    StagnationTrigger, DiversityTrigger, BloatTrigger, LowPerformanceTrigger,
+)
 
 
 def _snap(**kwargs) -> MonitorSnapshot:
@@ -47,3 +49,29 @@ def test_trigger_name_is_class_name():
     assert StagnationTrigger().name == "StagnationTrigger"
     assert DiversityTrigger().name == "DiversityTrigger"
     assert BloatTrigger().name == "BloatTrigger"
+    assert LowPerformanceTrigger().name == "LowPerformanceTrigger"
+
+
+def test_low_performance_trigger_fires_when_val_r2_below_target():
+    t = LowPerformanceTrigger(target_r2=0.95, max_gen=50, min_gen=3)
+    assert t.evaluate(_snap(gen=10, val_r2=0.90)) is True
+
+
+def test_low_performance_trigger_does_not_fire_above_target():
+    t = LowPerformanceTrigger(target_r2=0.95, max_gen=50, min_gen=3)
+    assert t.evaluate(_snap(gen=10, val_r2=0.97)) is False
+
+
+def test_low_performance_trigger_does_not_fire_after_max_gen():
+    t = LowPerformanceTrigger(target_r2=0.95, max_gen=50, min_gen=3)
+    assert t.evaluate(_snap(gen=60, val_r2=0.80)) is False
+
+
+def test_low_performance_trigger_does_not_fire_before_min_gen():
+    t = LowPerformanceTrigger(target_r2=0.95, max_gen=50, min_gen=3)
+    assert t.evaluate(_snap(gen=2, val_r2=0.10)) is False
+
+
+def test_low_performance_trigger_does_not_fire_without_val_r2():
+    t = LowPerformanceTrigger(target_r2=0.95, max_gen=50, min_gen=3)
+    assert t.evaluate(_snap(gen=10, val_r2=None)) is False

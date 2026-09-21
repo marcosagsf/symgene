@@ -45,6 +45,18 @@ def test_migrate_single_pop_is_noop():
     after = [str(ind) for ind in pops[0]._population]
     assert original == after
 
+def test_migrate_ring_random_selection_and_replace():
+    pops = [make_pop(f"p{i}", seed=i) for i in range(2)]
+    sizes_before = [len(p._population) for p in pops]
+    migrate(pops, topology="ring", size=1, selection="random", replace="random")
+    sizes_after = [len(p._population) for p in pops]
+    assert sizes_before == sizes_after
+
+def test_migrate_unknown_topology_raises():
+    pops = [make_pop(f"p{i}", seed=i) for i in range(2)]
+    with pytest.raises(ValueError, match="Unknown migration topology"):
+        migrate(pops, topology="star", size=1, selection="best", replace="worst")
+
 def test_migrate_copies_not_references():
     pops = [make_pop(f"p{i}", seed=i) for i in range(2)]
     for ind in pops[0]._population:

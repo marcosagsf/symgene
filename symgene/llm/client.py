@@ -72,6 +72,16 @@ class LLMClient:
             resolved_key = api_key or _os.environ.get("GEMINI_API_KEY") or _os.environ.get("GOOGLE_API_KEY")
             return genai.Client(api_key=resolved_key) if resolved_key else genai.Client()
 
+    def ping(self) -> dict:
+        """Send a minimal test prompt and report status. Use for debugging."""
+        try:
+            result = self.complete("Reply with just: OK")
+            return {"status": "ok", "provider": self.provider, "model": self.model,
+                    "response": result.strip()[:80]}
+        except Exception as e:
+            return {"status": "error", "provider": self.provider, "model": self.model,
+                    "type": type(e).__name__, "msg": str(e)[:400]}
+
     def complete(self, prompt: str, system: str = "") -> str:
         """Send a prompt and return the text response.
 
@@ -120,24 +130,12 @@ class LLMClient:
 
     def _complete_gemini(self, prompt: str, system: str) -> str:
         from google.genai import types
-        # Cache thinking config — computed once on first call, never changes per instance.
-        # Disable thinking for models that support it (e.g. gemini-2.5-flash): thinking
-        # tokens count against max_output_tokens, starving the actual response.
-        if not hasattr(self, "_gemini_thinking_cfg"):
-            self._gemini_thinking_cfg = None
-            if "2.5" in self.model or "thinking" in self.model.lower():
-                try:
-                    self._gemini_thinking_cfg = types.ThinkingConfig(thinking_budget=0)
-                except Exception:
-                    pass
         config_kwargs: dict = dict(
             max_output_tokens=self.max_tokens,
             temperature=self.temperature,
         )
         if system:
             config_kwargs["system_instruction"] = system
-        if self._gemini_thinking_cfg is not None:
-            config_kwargs["thinking_config"] = self._gemini_thinking_cfg
         config = types.GenerateContentConfig(**config_kwargs)
         response = self._client.models.generate_content(
             model=self.model,

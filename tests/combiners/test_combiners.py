@@ -45,6 +45,16 @@ def test_linear_fit_predict():
     c.fit(G, y)
     assert c.predict(G).shape == (100,)
 
+def test_lasso_degree2_fit_predict():
+    c = LassoCombiner(alphas=[0.01, 0.1], degree=2)
+    c.fit(G, y)
+    assert c.predict(G).shape == (100,)
+
+def test_lasso_degree2_gene_weights():
+    c = LassoCombiner(alphas=[0.01], degree=2)
+    c.fit(G, y)
+    assert c.gene_weights_.shape == (5,)
+
 def test_ridge_r2_reasonable():
     c = RidgeCombiner(alphas=[1.0])
     c.fit(G, y)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 import random
 import textwrap
+import time
 from typing import Any, TYPE_CHECKING
 
 import numpy as np
@@ -20,6 +21,10 @@ if TYPE_CHECKING:
 
 _BORDER = "━" * 54
 
+# Extra cooldown penalty applied after an LLM rate-limit (429) error,
+# expressed in generations. Helps avoid hammering rate-limited APIs.
+_RATE_LIMIT_COOLDOWN_PENALTY = 30
+
 
 class AIGuidedEvolver:
     def __init__(
@@ -30,6 +35,9 @@ class AIGuidedEvolver:
         triggers: list[BaseTrigger] | None = None,
         max_interventions: int = 8,
         cooldown: int = 15,
+        val_r2_threshold: float = 0.999,
+        wait_on_rate_limit: bool = False,
+        rate_limit_wait: int = 65,
         seed: int | None = None,
         verbose: int = 1,
         **evolver_kwargs: Any,
@@ -49,6 +57,13 @@ class AIGuidedEvolver:
         ]
         self.max_interventions = max_interventions
         self.cooldown = cooldown
+        # Skip advisor when validation R² already exceeds this threshold.
+        # Set to 0.0 to disable (always allow interventions).
+        self.val_r2_threshold = val_r2_threshold
+        # If True: pausa a evolucao e aguarda rate_limit_wait segundos antes de
+        # tentar novamente (conta como 1 intervencao). Se False: skip e cooldown.
+        self.wait_on_rate_limit = wait_on_rate_limit
+        self.rate_limit_wait = rate_limit_wait
         self.verbose = verbose
 
         self._monitor = EvolutionMonitor()
@@ -81,6 +96,21 @@ class AIGuidedEvolver:
 
         for cb in ev.callbacks:
             cb.on_train_begin()
+
+        if self.verbose >= 1:
+            if self._diagnostician is None:
+                print(
+                    "[AIGuidedEvolver] Modo dry-run: llm_client=None "
+                    "— triggers sao avaliados mas nao ha intervencao LLM."
+                )
+            else:
+                _prov = getattr(self.llm_client, 'provider', '?')
+                print(
+                    f"[AIGuidedEvolver] Advisor ativo | provider={_prov} | "
+                    f"max_interventions={self.max_interventions} | "
+                    f"cooldown={self.cooldown} | "
+                    f"val_r2_threshold={self.val_r2_threshold}"
+                )
 
         try:
             for gen in range(ev.n_gen):
@@ -132,21 +162,27 @@ class AIGuidedEvolver:
                         fit = pop.best.fitness.values[0] if pop.best else "?"
                         print(f"Gen {gen:4d} | {pop.name} | fitness={fit:.6f}")
 
-                # advisor hook — runs only when LLM client is present
-                if (self._diagnostician is not None
-                        and interventions_left > 0
-                        and cooldown_remaining == 0):
+                # advisor hook — triggers always evaluated; LLM called only when client is set
+                if interventions_left > 0 and cooldown_remaining == 0:
                     for pop in ev.populations:
+                        h = pop_histories[pop.name]
+                        val_r2_now: float | None = None
                         val_fit: float | None = None
-                        if X_val is not None and y_val is not None:
-                            h = pop_histories[pop.name]
-                            if h:
-                                vr = h[-1].get("val_r2")
-                                if vr is not None:
-                                    val_fit = float(1.0 - vr)
+                        if X_val is not None and y_val is not None and h:
+                            vr = h[-1].get("val_r2")
+                            if vr is not None:
+                                val_r2_now = float(vr)
+                                val_fit = float(1.0 - vr)
+
+                        # skip when model has already converged
+                        if (self.val_r2_threshold > 0.0
+                                and val_r2_now is not None
+                                and val_r2_now >= self.val_r2_threshold):
+                            continue
 
                         snapshot = self._monitor.update(
-                            gen, pop, pop_histories[pop.name], val_fit
+                            gen, pop, h, val_fit, val_r2=val_r2_now,
+                            intervention_history=self._advisor_log,
                         )
                         fired: BaseTrigger | None = None
                         for trigger in self.triggers:
@@ -155,9 +191,23 @@ class AIGuidedEvolver:
                                 break
 
                         if fired is not None:
-                            self._intervene(gen, pop, snapshot, fired)
-                            interventions_left -= 1
-                            cooldown_remaining = self.cooldown
+                            if self._diagnostician is not None:
+                                penalty = self._intervene(gen, pop, snapshot, fired)
+                                interventions_left -= 1
+                                cooldown_remaining = self.cooldown + penalty
+                                # Re-evaluate after intervention: genetic_rescue sets
+                                # fitness.valid = False on replaced individuals.
+                                pop.evaluate(X, y[pop.name])
+                            else:
+                                # dry-run: trigger detected but no LLM available
+                                vr_str = f"{val_r2_now:.4f}" if val_r2_now is not None else "N/A"
+                                if self.verbose >= 1:
+                                    print(
+                                        f"\n[AIGuidedEvolver] Trigger: {fired.name} "
+                                        f"at gen {gen} | val_r2={vr_str} "
+                                        f"— dry-run (sem llm_client, nenhuma acao tomada)."
+                                    )
+                                cooldown_remaining = self.cooldown
                             break
 
                 if cooldown_remaining > 0:
@@ -194,54 +244,189 @@ class AIGuidedEvolver:
         pop: Population,
         snapshot: Any,
         trigger: BaseTrigger,
-    ) -> None:
+    ) -> int:
+        """Execute one LLM-guided intervention. Returns extra cooldown penalty (0 normally, >0 on rate limit)."""
         assert self._diagnostician is not None
         fitness_before = snapshot.best_fitness
         llm_calls = 0
         tokens_used = 0
 
-        try:
-            diagnosis = self._diagnostician.diagnose(snapshot)
-            llm_calls += 1
-            tokens_used += 800
-
-            if self.verbose >= 1:
-                self._print_block(gen, diagnosis)
-
-            action_result = self._executor.execute(diagnosis, pop, gen)
-            if diagnosis.recommended_action == "genetic_rescue":
+        # Inner attempt — separated so rate-limit retry can call it again.
+        def _attempt() -> tuple[bool, int]:
+            nonlocal llm_calls, tokens_used
+            try:
+                diagnosis = self._diagnostician.diagnose(snapshot)
                 llm_calls += 1
-                tokens_used += 1200
+                tokens_used += 800
 
-            self._advisor_log.append({
-                "gen": gen,
-                "trigger": trigger.name,
-                "root_cause": diagnosis.root_cause,
-                "action": diagnosis.recommended_action,
-                "n_affected": action_result.get("n_affected", 0),
-                "llm_calls": llm_calls,
-                "tokens_used": tokens_used,
-                "fitness_before": fitness_before,
-                "status": "success",
-            })
+                if self.verbose >= 1:
+                    self._print_block(gen, diagnosis, trigger)
 
-        except Exception as exc:
+                action_result = self._executor.execute(diagnosis, pop, gen)
+                if diagnosis.recommended_action == "genetic_rescue":
+                    llm_calls += 1
+                    tokens_used += 1200
+
+                if self.verbose >= 1:
+                    self._print_action_result(diagnosis, action_result, snapshot)
+
+                self._advisor_log.append({
+                    "gen": gen,
+                    "trigger": trigger.name,
+                    "root_cause": diagnosis.root_cause,
+                    "action": diagnosis.recommended_action,
+                    "n_affected": action_result.get("n_affected", 0),
+                    "changes": action_result.get("changes", {}),
+                    "llm_calls": llm_calls,
+                    "tokens_used": tokens_used,
+                    "fitness_before": fitness_before,
+                    "reasoning": diagnosis.reasoning[:300] if diagnosis.reasoning else "",
+                    "status": "success",
+                })
+                return True, 0
+
+            except Exception as exc:
+                exc_str = str(exc)
+                exc_type = type(exc).__name__
+                is_rate_limit = "429" in exc_str or "RESOURCE_EXHAUSTED" in exc_str
+                penalty = _RATE_LIMIT_COOLDOWN_PENALTY if is_rate_limit else 0
+
+                is_quota_exhausted = "free_tier_requests" in exc_str or (
+                    is_rate_limit and "free_tier" in exc_str
+                )
+
+                if self.verbose >= 1:
+                    if is_quota_exhausted:
+                        print(
+                            f"\n[SymGene Advisor] COTA ESGOTADA (gen {gen}): "
+                            f"generativelanguage.googleapis.com/generate_content_free_tier_requests.\n"
+                            f"  Isso nao e um limite por minuto — e a cota total do free tier.\n"
+                            f"  Solucoes: (1) aguarde o reset diario (meia-noite UTC), "
+                            f"(2) ative faturamento no Google Cloud, "
+                            f"(3) use llm_client=None para dry-run.\n"
+                            f"  Advisor desativado por {penalty} geracoes.\n"
+                        )
+                    elif is_rate_limit:
+                        print(
+                            f"\n[SymGene Advisor] WARNING: limite de taxa (RPM) gen {gen} "
+                            f"— aguardando cooldown de {penalty} gens.\n"
+                            f"  [{exc_type}] {exc_str[:200]}\n"
+                        )
+                    else:
+                        print(
+                            f"\n[SymGene Advisor] WARNING: intervencao falhou "
+                            f"gen {gen}: [{exc_type}] {exc_str[:300]}\n"
+                            "  Evolucao continua normalmente.\n"
+                        )
+
+                self._advisor_log.append({
+                    "gen": gen,
+                    "trigger": trigger.name,
+                    "status": "rate_limited" if is_rate_limit else "failed",
+                    "reason": exc_str,
+                    "extra_cooldown": penalty,
+                })
+                return False, penalty
+
+        success, penalty = _attempt()
+        if success:
+            return 0
+
+        # If rate-limited and wait_on_rate_limit=True: pause and retry once.
+        is_rate_limit = penalty > 0
+        if is_rate_limit and self.wait_on_rate_limit:
+            wait_sec = self.rate_limit_wait
             if self.verbose >= 1:
                 print(
-                    f"\n[SymGene Advisor] WARNING: intervention failed "
-                    f"at gen {gen}: {exc}\n"
-                    "  Evolution continues normally.\n"
+                    f"  [SymGene Advisor] Aguardando {wait_sec}s para retentar "
+                    f"(wait_on_rate_limit=True)..."
                 )
-            self._advisor_log.append({
-                "gen": gen,
-                "trigger": trigger.name,
-                "status": "failed",
-                "reason": str(exc),
-            })
+            time.sleep(wait_sec)
+            success2, penalty2 = _attempt()
+            if success2:
+                if self.verbose >= 1:
+                    print("  [SymGene Advisor] Retentativa OK apos espera.\n")
+                return 0
+            if self.verbose >= 1:
+                print("  [SymGene Advisor] Retentativa falhou. Cooldown aplicado.\n")
+            return penalty2
 
-    def _print_block(self, gen: int, diagnosis: Diagnosis) -> None:
+        if is_rate_limit and self.verbose >= 1:
+            print(
+                f"  Adding {penalty}-gen cooldown. Evolution continues normally.\n"
+            )
+        return penalty
+
+    def _print_block(self, gen: int, diagnosis: Diagnosis, trigger: BaseTrigger) -> None:
         print(f"\n{_BORDER}")
-        print(f"  ◆ SymGene Advisor [Gen {gen}]")
+        print(f"  ◆ SymGene Advisor [Gen {gen}] | Trigger: {trigger.name}")
+        print(f"  Causa: {diagnosis.root_cause} | Acao: {diagnosis.recommended_action}")
         for line in textwrap.wrap(diagnosis.advisor_message, width=50):
             print(f"  {line}")
-        print(f"{_BORDER}\n")
+        print(f"{_BORDER}")
+
+    def _print_action_result(
+        self, diagnosis: Diagnosis, action_result: dict, snapshot: Any
+    ) -> None:
+        action = diagnosis.recommended_action
+        n = action_result.get("n_affected", 0)
+        llm_n = action_result.get("llm_injected", n)
+        val_r2_str = f"{snapshot.val_r2:.4f}" if snapshot.val_r2 is not None else "N/A"
+
+        if action == "genetic_rescue":
+            if n == 0:
+                body = (
+                    f"Resgate genetico FALHOU: nenhum individuo substituido. "
+                    f"Pode indicar que o LLM gerou expressoes com tokens invalidos. "
+                    f"Evolucao continua normalmente."
+                )
+            else:
+                fallback_n = n - llm_n
+                parts = []
+                if llm_n > 0:
+                    parts.append(f"{llm_n} expressao(oes) injetada(s) pelo LLM")
+                if fallback_n > 0:
+                    parts.append(f"{fallback_n} regenerado(s) aleatoriamente pelo toolbox")
+                body = (
+                    f"Resgate genetico concluido: {n} individuo(s) substituidos "
+                    f"({'; '.join(parts)}). Os piores {n} individuos foram substituidos "
+                    f"por novas estruturas. R² validacao: {val_r2_str}."
+                )
+        elif action in ("adjust_parameters", "adjust_mutation_rate"):
+            changes = action_result.get("changes", {})
+            if changes:
+                change_strs = [
+                    f"{k}: {v['from']}→{v['to']}" for k, v in changes.items()
+                ]
+                body = (
+                    f"Parametros evolutivos ajustados: {', '.join(change_strs)}. "
+                    f"R² validacao: {val_r2_str}."
+                )
+            else:
+                body = f"Nenhum parametro alterado (valores ja no limite). R²={val_r2_str}."
+        elif action == "suggest_primitive":
+            if n > 0:
+                pname = action_result.get("name", "?")
+                desc = action_result.get("description", "")
+                lstr = action_result.get("lambda_str", "")[:60]
+                body = (
+                    f"Nova primitiva '{pname}' (aridade={action_result.get('arity', '?')}) "
+                    f"adicionada ao pset: {lstr}. "
+                    f"{desc[:80]} R²={val_r2_str}."
+                )
+            else:
+                reason = action_result.get("reason", "erro desconhecido")
+                body = f"Sugestao de primitiva FALHOU: {reason}. R²={val_r2_str}."
+        elif action == "restart_worst":
+            body = (
+                f"Reinicio dos {n} piores individuos com expressoes aleatorias. "
+                f"R² validacao: {val_r2_str}."
+            )
+        elif action == "suggest_early_stop":
+            body = f"Parada antecipada sugerida — modelo convergido (R²={val_r2_str})."
+        else:
+            body = f"Acao '{action}': {n} elemento(s) afetado(s). R²={val_r2_str}."
+
+        for line in textwrap.wrap(f"  >> {body}", width=54):
+            print(line)
+        print()

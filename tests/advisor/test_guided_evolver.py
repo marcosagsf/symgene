@@ -68,3 +68,64 @@ def test_default_triggers_applied_when_none_provided():
         populations=[pop], n_gen=3, llm_client=None, verbose=0,
     )
     assert len(guided.triggers) == 3
+
+
+def test_aiguidedvolver_verbose1_does_not_crash(capsys):
+    pop = _make_pop()
+    guided = AIGuidedEvolver(
+        populations=[pop], n_gen=3, llm_client=None, verbose=1,
+    )
+    guided.fit(_X, _y)
+    captured = capsys.readouterr()
+    assert "[AIGuidedEvolver]" in captured.out
+
+
+def test_aiguidedvolver_with_val_data():
+    pop = _make_pop()
+    X_val = _rng.random((10, 2))
+    y_val = {"target": X_val[:, 0] + X_val[:, 1]}
+    guided = AIGuidedEvolver(
+        populations=[pop], n_gen=5, llm_client=None, verbose=0,
+    )
+    result = guided.fit(_X, _y, X_val=X_val, y_val=y_val)
+    hist = result["target"].history_
+    assert "val_r2" in hist[0]
+
+
+def test_aiguidedvolver_with_seed():
+    """Passing seed exercises the seed-setting path in fit()."""
+    pop = _make_pop()
+    guided = AIGuidedEvolver(
+        populations=[pop], n_gen=3, llm_client=None, verbose=0, seed=42,
+    )
+    result = guided.fit(_X, _y)
+    assert "target" in result
+
+
+def test_aiguidedvolver_with_callbacks():
+    """Callbacks are invoked from guided_evolver's fit loop."""
+    from symgene.callbacks.base import Callback
+    class CountCallback(Callback):
+        def __init__(self): self.begin_count = 0
+        def on_train_begin(self, logs=None): self.begin_count += 1
+    pop = _make_pop()
+    cb = CountCallback()
+    guided = AIGuidedEvolver(
+        populations=[pop], n_gen=3, llm_client=None, verbose=0, callbacks=[cb],
+    )
+    guided.fit(_X, _y)
+    assert cb.begin_count == 1
+
+
+def test_aiguidedvolver_stagnation_trigger_dry_run(capsys):
+    """Trigger fires but no LLM available — dry-run message printed at verbose=1."""
+    pop = _make_pop()
+    guided = AIGuidedEvolver(
+        populations=[pop], n_gen=10, llm_client=None,
+        triggers=[StagnationTrigger(patience=1)],
+        verbose=1,
+    )
+    guided.fit(_X, _y)
+    captured = capsys.readouterr()
+    # dry-run path prints trigger info
+    assert len(captured.out) > 0

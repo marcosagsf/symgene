@@ -188,6 +188,31 @@ def test_reduce_on_plateau_fires():
     assert pop.mutpb < 0.4
 
 
+def test_early_stopping_fires_before_n_gen_with_evolver():
+    """EarlyStopping with large min_delta must stop the evolver before n_gen."""
+    import numpy as np
+    from symgene import PrimitiveSet, Population, SymGeneEvolver
+    from symgene.primitives import STANDARD
+
+    n_gen = 20
+    pset = PrimitiveSet(n_inputs=2)
+    pset.add_from_catalog(STANDARD)
+    pop = Population("p1", pset, n_genes=2, pop_size=10, n_genes_max=4)
+
+    cb = EarlyStopping(
+        monitor="p1_train_mse",
+        patience=1,
+        min_delta=1e9,  # artificially huge → never "improves" → fires at gen 1
+        mode="min",
+    )
+
+    X2 = np.random.default_rng(7).standard_normal((30, 2))
+    y2 = X2[:, 0] ** 2
+    evolver = SymGeneEvolver(populations=[pop], n_gen=n_gen, callbacks=[cb], verbose=0)
+    results = evolver.fit(X2, {"p1": y2})
+
+    assert len(results["p1"].history_) < n_gen
+
 def test_reduce_on_plateau_min_value():
     class FakePop:
         lr = 0.1
@@ -200,3 +225,45 @@ def test_reduce_on_plateau_min_value():
     for i in range(20):
         cb.on_generation_end(i, {"gen": i, "pop1_train_mse": 0.5})
     assert pop.lr >= 0.01
+
+
+def test_reduce_on_plateau_missing_monitor_returns_early():
+    class FakePop:
+        mutpb = 0.4
+    pop = FakePop()
+    cb = ReduceOnPlateau(target=pop, param="mutpb", monitor="pop1_train_mse", patience=3)
+    cb.on_train_begin()
+    cb.on_generation_end(0, {"gen": 0, "other_metric": 0.5})
+    assert pop.mutpb == 0.4
+
+
+def test_reduce_on_plateau_improvement_resets_wait():
+    class FakePop:
+        mutpb = 0.4
+    pop = FakePop()
+    cb = ReduceOnPlateau(
+        target=pop, param="mutpb", monitor="pop1_train_mse",
+        factor=0.5, patience=10, min_delta=1e-6,
+    )
+    cb.on_train_begin()
+    cb.on_generation_end(0, {"gen": 0, "pop1_train_mse": 0.5})
+    cb.on_generation_end(1, {"gen": 1, "pop1_train_mse": 0.3})
+    assert cb._best == pytest.approx(0.3)
+    assert cb._wait == 0
+
+
+def test_generation_logger_del_closes_file(tmp_path):
+    cb = GenerationLogger(file=str(tmp_path / "del_test.log"))
+    cb.on_train_begin()
+    assert cb._fh is not None
+    cb.__del__()
+    assert cb._fh is None
+
+
+def test_generation_logger_del_exception_is_swallowed():
+    from unittest.mock import MagicMock
+    cb = GenerationLogger()
+    cb._fh = MagicMock()
+    cb._fh.close.side_effect = OSError("simulated close error")
+    cb.__del__()
+    assert cb._fh is None

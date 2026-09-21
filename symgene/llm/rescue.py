@@ -136,6 +136,12 @@ def _try_parse_gene(text: str, deap_pset, tree_max: int = 9999):
         return None
     try:
         tree = gp.PrimitiveTree.from_string(text, deap_pset)
+        # DEAP's from_string stores ephemeral *classes* (not instances) when it
+        # encounters ephemeral names like pow_exp_0. Calling each class produces
+        # a Terminal instance with a sampled value, which is what the tree expects.
+        for i, node in enumerate(tree):
+            if isinstance(node, type):
+                tree[i] = node()
         if len(tree) > tree_max:
             return None
         return creator.SGGene(tree)

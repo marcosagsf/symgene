@@ -63,6 +63,40 @@ def test_missing_vars_penalty_none_missing():
     ind = make_individual([g])
     assert pen(ind, None, None) == pytest.approx(0.0)
 
+from symgene.metrics.diversity import genotypic_diversity, phenotypic_diversity
+
+def test_genotypic_diversity_unique():
+    class FakeInd:
+        def __init__(self, s): self._s = s
+        def __str__(self): return self._s
+        def __iter__(self): return iter([])
+    pop = [FakeInd("a"), FakeInd("b"), FakeInd("c")]
+    assert genotypic_diversity(pop) == pytest.approx(1.0)
+
+def test_genotypic_diversity_duplicates():
+    class FakeInd:
+        def __init__(self, s): self._s = s
+        def __str__(self): return self._s
+        def __iter__(self): return iter([])
+    pop = [FakeInd("a"), FakeInd("a")]
+    assert genotypic_diversity(pop) == pytest.approx(0.5)
+
+def test_phenotypic_diversity_without_predict():
+    class NoPredict:
+        def __iter__(self): return iter([])
+    pop = [NoPredict(), NoPredict()]
+    result = phenotypic_diversity(pop, np.ones((5, 2)))
+    assert result == pytest.approx(0.0)
+
+def test_phenotypic_diversity_with_predict():
+    X_d = np.ones((10, 1))
+    class IndWithPredict:
+        def __init__(self, offset): self._offset = offset
+        def predict(self, X): return X[:, 0] + self._offset
+    pop = [IndWithPredict(0.0), IndWithPredict(1.0), IndWithPredict(-1.0)]
+    result = phenotypic_diversity(pop, X_d)
+    assert result > 0.0
+
 def test_missing_vars_penalty_all_missing():
     required = {"x1", "x2", "x3"}
     pen = missing_vars_penalty(required=required, beta=1.0)

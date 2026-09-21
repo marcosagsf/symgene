@@ -36,6 +36,22 @@ def test_add_custom_primitive():
     names = [p[2] for p in pset.primitives]
     assert "my_fn" in names
 
+def test_add_custom_with_sympy_fn():
+    pset = PrimitiveSet(n_inputs=2)
+    cube_fn = lambda x: x ** 3
+    cube_sympy = lambda x: x ** 3
+    pset.add_custom(cube_fn, arity=1, name="cube", sympy_fn=cube_sympy)
+    registry = pset.sympy_registry()
+    assert "cube" in registry
+    assert registry["cube"] is cube_sympy
+
+def test_add_custom_without_sympy_fn():
+    pset = PrimitiveSet(n_inputs=2)
+    pset.add_custom(lambda a, b: a - b, arity=2, name="sub2")
+    registry = pset.sympy_registry()
+    assert "sub2" in registry
+    assert registry["sub2"] is None
+
 def test_add_ephemeral():
     pset = PrimitiveSet(n_inputs=2)
     pset.add_ephemeral("c_small", dist="uniform", low=-1.5, high=1.5, n=3)

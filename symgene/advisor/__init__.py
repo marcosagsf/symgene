@@ -1,5 +1,7 @@
 from symgene.advisor.guided_evolver import AIGuidedEvolver
-from symgene.advisor.triggers import StagnationTrigger, DiversityTrigger, BloatTrigger
+from symgene.advisor.triggers import (
+    StagnationTrigger, DiversityTrigger, BloatTrigger, LowPerformanceTrigger,
+)
 from symgene.advisor.monitor import EvolutionMonitor, MonitorSnapshot
 
 __all__ = [
@@ -7,6 +9,7 @@ __all__ = [
     "StagnationTrigger",
     "DiversityTrigger",
     "BloatTrigger",
+    "LowPerformanceTrigger",
     "EvolutionMonitor",
     "MonitorSnapshot",
 ]
