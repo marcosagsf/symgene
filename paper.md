@@ -33,7 +33,7 @@ multi-population co-evolution. Each population can be configured with independen
 selection strategies, fitness evaluators, primitive sets, and adaptive parameter
 schedules. An integrated Particle Swarm Optimizer (PSO) enables surrogate-assisted
 optimization workflows, in which MGGP learns an analytical surface from sampled data
-and PSO minimizes it at negligible additional computational cost.
+and PSO minimizes that surface instead of the original, expensive objective.
 
 # Statement of Need
 
@@ -74,9 +74,9 @@ workflows can be constructed, but doing so requires substantial user-level boile
 code. GPTIPS [@searson2010] implemented MGGP in MATLAB but is no longer actively
 maintained and unavailable in Python.
 
-SymGene occupies the gap between these options: a Python-native MGGP library with
-multi-population co-evolution, PSO surrogate optimization, and full symbolic export,
-built on DEAP [@fortin2012] and compatible with scikit-learn.
+SymGene provides what these options individually lack: a Python-native MGGP library
+with multi-population co-evolution, PSO surrogate optimization, and full symbolic
+export, built on DEAP [@fortin2012] and compatible with scikit-learn.
 
 # Software Design
 
@@ -123,14 +123,14 @@ Python function with no SymGene dependency.
 
 A benchmark suite covering Koza [@koza1992], Nguyen, and multimodal optimization
 functions (Forrester, Himmelblau, Ackley, Schwefel) is included for reproducibility.
-Five illustrative examples and companion Jupyter notebooks demonstrate the main
-library features across regression and surrogate optimization tasks.
+Eight worked examples and companion Jupyter notebooks demonstrate the main library
+features across regression, surrogate optimization, and LLM-assisted tasks.
 
 # Research Impact
 
 SymGene directly extends the methodology described in @filho2025, where multi-gene
-genetic programming was applied to nuclear reactor fuel reload calculations at the
-Angra II power plant. The library packages this methodology into a reusable,
+genetic programming was applied to nuclear reactor fuel reload calculations for the
+Angra I power plant. The library packages this methodology into a reusable,
 documented form so that researchers in other engineering and scientific domains can
 apply multi-population MGGP without reimplementing the core evolutionary machinery.
 

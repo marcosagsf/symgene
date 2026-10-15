@@ -13,17 +13,27 @@ SymGene provides a modular, extensible framework for evolving interpretable clos
 
 ## Features
 
-- **Symbolic regression** — evolve closed-form expressions from data using multi-gene representation
-- **Multi-population co-evolution** — independent or cooperating populations evolving on different targets simultaneously
-- **Surrogate-assisted optimization** — fit a MGGP surrogate model, then minimize with PSO on the learned surface
-- **Custom primitive sets** — extend with domain-specific functions, with optional SymPy mapping for symbolic export
-- **Symbolic export** — `to_sympy()`, `to_latex()`, `to_callable()` on any fitted model
-- **sklearn-like API** — `SymGeneRegressor` for single-population regression; `SymGeneEvolver` for full multi-population control
-- **Callbacks** — `EarlyStopping`, `GenerationLogger`, adaptive parameter scheduling per generation
-- **Combiners** — Ridge, Lasso, and Linear regression of gene outputs, with polynomial degree support
-- **Selection strategies** — Tournament, Rank, Roulette, Lexicase, and Gene-level selection
-- **Benchmark suite** — Koza (3), Nguyen (10), and optimization benchmarks (Forrester, Himmelblau, Ackley, Schwefel)
-- **LLM assistance** *(optional)* — primitive selection from domain description, expression interpretation, and Genetic Rescue inside the evolutionary loop
+A SymGene model is a weighted sum of evolved gene trees, fitted by Ridge, Lasso, or
+ordinary least squares (optionally with a polynomial expansion of the gene outputs).
+Every fitted model exports to a SymPy expression, a LaTeX string, or a standalone
+Python callable that carries no runtime dependency on SymGene.
+
+Two entry points cover different needs. `SymGeneRegressor` is a scikit-learn-style
+estimator for single-population regression; `SymGeneEvolver` drives several
+populations at once — independent or cooperating, each on its own target.
+
+Around that core:
+
+- Selection by tournament, rank, roulette, lexicase, or gene weight.
+- Surrogate-assisted optimization: fit an MGGP surrogate, then minimize it with PSO.
+- Custom primitives, each with an optional SymPy counterpart for exact export.
+- Callbacks for early stopping, logging, and per-generation parameter scheduling.
+- Parallel fitness evaluation across the population via `n_jobs`.
+- A benchmark suite — the Koza and Nguyen symbolic-regression problems and the
+  Forrester, Himmelblau, Ackley, and Schwefel optimization functions.
+- Optional LLM assistance (`pip install symgene[llm]`): primitive selection from a
+  plain-language domain description, interpretation of the evolved expression, and
+  Genetic Rescue during evolution.
 
 ---
 
@@ -211,7 +221,7 @@ If the LLM API becomes unreachable, a warning is printed and evolution continues
 
 ## Examples
 
-The `examples/` directory contains five self-contained scripts covering the main use cases.
+The `examples/` directory contains eight self-contained scripts covering the main use cases.
 Rich visualisations and full execution outputs are available in the companion `notebooks/`.
 
 | Script | Benchmark | Key features demonstrated |
@@ -305,11 +315,12 @@ This project is licensed under the MIT License — see [LICENSE](LICENSE) for de
 If you use SymGene in your research, please cite:
 
 ```bibtex
-@article{symgene2026,
-  title   = {SymGene: A Multi-Gene Genetic Programming Library for Symbolic Regression
-             and Surrogate-Assisted Optimization},
-  author  = {Filho, Marcos A. G. S.},
-  journal = {Journal of Open Source Software},
-  year    = {2026},
+@misc{symgene,
+  title  = {SymGene: A Multi-Gene Genetic Programming Library for Symbolic Regression
+            and Surrogate-Assisted Optimization},
+  author = {Filho, Marcos A. G. S.},
+  year   = {2026},
+  note   = {Software. A paper describing SymGene is in preparation for the Journal of Open Source Software.},
+  url    = {https://github.com/marcosagsf/symgene},
 }
 ```

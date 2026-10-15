@@ -12,3 +12,6 @@ htmlcov/
 
 # Sphinx build output
 docs/_build/
+
+# Internal planning notes (not part of the published documentation)
+docs/superpowers/
