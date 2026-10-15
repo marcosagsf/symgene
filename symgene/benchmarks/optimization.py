@@ -17,11 +17,14 @@ class OptimBenchmark(NamedTuple):
 
 
 def forrester_1d(noise: float = 0.0, seed: int = 0) -> OptimBenchmark:
-    """
-    Forrester et al. (2008) 1D benchmark.
-    f(x) = (6x - 2)^2 * sin(12x - 4),  x in [0, 1]
-    Global minimum at x ≈ 0.7572, f ≈ -6.0207
-    Classic surrogate modeling benchmark.
+    """Forrester et al. (2008) 1D benchmark.
+
+    ::
+
+        f(x) = (6x - 2)^2 * sin(12x - 4),  x in [0, 1]
+
+    Global minimum at x ~ 0.7572, f ~ -6.0207. A classic surrogate-modeling
+    benchmark.
     """
     rng = np.random.default_rng(seed)
 
@@ -44,11 +47,14 @@ def forrester_1d(noise: float = 0.0, seed: int = 0) -> OptimBenchmark:
 
 
 def himmelblau_2d() -> OptimBenchmark:
-    """
-    Himmelblau's function.
-    f(x,y) = (x^2 + y - 11)^2 + (x + y^2 - 7)^2,  x,y in [-5, 5]
-    Four global minima, all at f = 0:
-      (3, 2), (-2.805, 3.131), (-3.779, -3.283), (3.584, -1.848)
+    """Himmelblau's function.
+
+    ::
+
+        f(x, y) = (x^2 + y - 11)^2 + (x + y^2 - 7)^2,  x, y in [-5, 5]
+
+    Four global minima, all at f = 0: (3, 2), (-2.805, 3.131),
+    (-3.779, -3.283), and (3.584, -1.848).
     """
     def fn(x: np.ndarray) -> float:
         return float((x[0]**2 + x[1] - 11)**2 + (x[0] + x[1]**2 - 7)**2)
@@ -65,12 +71,15 @@ def himmelblau_2d() -> OptimBenchmark:
 
 
 def schwefel_2d() -> OptimBenchmark:
-    """
-    Schwefel function (2D).
-    f(x, y) = 418.9829*2 - x*sin(sqrt(|x|)) - y*sin(sqrt(|y|))
-    Global minimum at (420.9687, 420.9687), f ≈ 0.
-    Highly multimodal — many deceptive local minima far from the global optimum.
-    Domain: x, y in [-500, 500]
+    """Schwefel function (2D).
+
+    ::
+
+        f(x, y) = 418.9829*2 - x*sin(sqrt(|x|)) - y*sin(sqrt(|y|))
+
+    Global minimum at (420.9687, 420.9687), f ~ 0. Highly multimodal, with
+    many deceptive local minima far from the global optimum.
+    Domain: x, y in [-500, 500].
     """
     def fn(x: np.ndarray) -> float:
         return float(418.9829 * 2 - x[0] * np.sin(np.sqrt(abs(x[0])))
@@ -88,11 +97,10 @@ def schwefel_2d() -> OptimBenchmark:
 
 
 def ackley_2d() -> OptimBenchmark:
-    """
-    Ackley function (2D).
-    Global minimum at (0, 0), f = 0.
-    Many local minima — challenging for gradient-free optimizers.
-    x, y in [-5, 5]
+    """Ackley function (2D).
+
+    Global minimum at (0, 0), f = 0, over x, y in [-5, 5]. Many local minima,
+    which makes it challenging for gradient-free optimizers.
     """
     def fn(x: np.ndarray) -> float:
         a, b, c = 20.0, 0.2, 2 * np.pi

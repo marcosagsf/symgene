@@ -9,3 +9,6 @@ build/
 htmlcov/
 *.sgk
 *.sgr
+
+# Sphinx build output
+docs/_build/

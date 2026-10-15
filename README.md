@@ -1,6 +1,7 @@
 # SymGene
 
 [![Tests](https://github.com/marcosagsf/symgene/actions/workflows/tests.yml/badge.svg)](https://github.com/marcosagsf/symgene/actions/workflows/tests.yml)
+[![Documentation Status](https://readthedocs.org/projects/symgene/badge/?version=latest)](https://symgene.readthedocs.io/en/latest/)
 [![PyPI](https://img.shields.io/pypi/v/symgene.svg)](https://pypi.org/project/symgene/)
 [![Python](https://img.shields.io/pypi/pyversions/symgene.svg)](https://pypi.org/project/symgene/)
 
