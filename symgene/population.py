@@ -98,6 +98,18 @@ class Population:
             schedule={"cxpb": {100: 0.5, 150: 0.3}}
 
         sets ``cxpb=0.5`` from generation 100 and ``cxpb=0.3`` from 150.
+    n_jobs : int
+        Number of parallel workers for per-individual fitness evaluation.
+        ``1`` (default) evaluates sequentially. Any other value dispatches
+        the population through ``joblib.Parallel``. ``-1`` uses all cores.
+    parallel_backend : {"threading", "loky", "multiprocessing"}
+        joblib backend used when ``n_jobs != 1``. Default ``"threading"``,
+        which shares memory and avoids serialising the primitive set and
+        individuals each generation. The fitness loop spends most of its
+        time in NumPy/scikit-learn calls that release the GIL, so threads
+        give useful speed-ups without pickling overhead. ``"loky"`` uses
+        separate processes and can help for very heavy pure-Python
+        primitives, at the cost of pickling the population every generation.
     """
 
     def __init__(
@@ -123,6 +135,8 @@ class Population:
         mutpb_low: float = 0.2,
         mutation_weights: list[float] | None = None,
         schedule: dict | None = None,
+        n_jobs: int = 1,
+        parallel_backend: str = "threading",
     ):
         self.name = name
         self.pset = pset
@@ -145,6 +159,8 @@ class Population:
         self.mutpb_low = mutpb_low
         self.mutation_weights = mutation_weights or [1.0, 1.0, 1.2]
         self.schedule = schedule or {}
+        self.n_jobs = n_jobs
+        self.parallel_backend = parallel_backend
 
         self._deap_pset: gp.PrimitiveSet | None = None
         self._toolbox: base.Toolbox | None = None
@@ -223,13 +239,32 @@ class Population:
         if self.combiner_name in ("ridge", "lasso"):
             combiner_kwargs["alphas"] = self.ridge_alphas
 
-        for ind in self._population:
-            self._eval_individual(ind, X, y, combiner_kwargs)
+        if self.n_jobs == 1:
+            for ind in self._population:
+                result = self._compute_individual(ind, X, y, combiner_kwargs)
+                self._apply_result(ind, result)
+        else:
+            from joblib import Parallel, delayed
+            results = Parallel(n_jobs=self.n_jobs, backend=self.parallel_backend)(
+                delayed(self._compute_individual)(ind, X, y, combiner_kwargs)
+                for ind in self._population
+            )
+            for ind, result in zip(self._population, results):
+                self._apply_result(ind, result)
 
         assert self._hof is not None
         self._hof.update(self._population)
 
-    def _eval_individual(self, ind: Any, X: np.ndarray, y: np.ndarray, combiner_kwargs: dict[str, Any]) -> None:
+    def _compute_individual(
+        self, ind: Any, X: np.ndarray, y: np.ndarray, combiner_kwargs: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Evaluate one individual and return its fitness artifacts.
+
+        Pure with respect to ``ind`` — nothing is mutated here — so the call
+        is safe to dispatch to a joblib worker (including process backends,
+        where in-place mutations would not propagate back). The returned
+        dict is applied to the individual by :meth:`_apply_result`.
+        """
         try:
             funcs = [gp.compile(expr=gene, pset=self._deap_pset) for gene in ind]
             G = np.column_stack([
@@ -241,16 +276,29 @@ class Population:
             combiner = _get_combiner(self.combiner_name, **combiner_kwargs)
             combiner.fit(G, y)
             y_pred = combiner.predict(G)
-            ind._case_errors = np.abs(y - y_pred)
-
             fitness_val = self.fitness.compute(ind, X, y, y_pred)
-            ind.fitness.values = (fitness_val,)
-            ind._combiner = combiner
-            ind._gene_outputs_std = G.std(axis=0)
+            return {
+                "ok": True,
+                "fitness": fitness_val,
+                "combiner": combiner,
+                "case_errors": np.abs(y - y_pred),
+                "gene_outputs_std": G.std(axis=0),
+            }
         except Exception as exc:
+            return {"ok": False, "error": (type(exc).__name__, str(exc))}
+
+    def _apply_result(self, ind: Any, result: dict[str, Any]) -> None:
+        """Write a :meth:`_compute_individual` result back onto ``ind``."""
+        if result["ok"]:
+            ind._case_errors = result["case_errors"]
+            ind.fitness.values = (result["fitness"],)
+            ind._combiner = result["combiner"]
+            ind._gene_outputs_std = result["gene_outputs_std"]
+        else:
             import warnings
+            exc_name, exc_msg = result["error"]
             warnings.warn(
-                f"Individual evaluation failed ({type(exc).__name__}: {exc}); "
+                f"Individual evaluation failed ({exc_name}: {exc_msg}); "
                 "assigning worst fitness.",
                 RuntimeWarning,
                 stacklevel=2,

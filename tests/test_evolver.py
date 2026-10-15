@@ -118,14 +118,15 @@ def test_evolver_resume_from_checkpoint(tmp_path):
     loaded = SymGeneEvolver.resume(str(sgk_files[0]))
     assert hasattr(loaded, "populations")
 
-def test_evolver_n_jobs_2_warns():
-    """n_jobs != 1 emits a UserWarning."""
-    import warnings
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        SymGeneEvolver(populations=[make_pop()], n_gen=1, seed=0, n_jobs=2)
-    user_warns = [x for x in w if issubclass(x.category, UserWarning)]
-    assert len(user_warns) > 0
+def test_evolver_n_jobs_2_runs_and_propagates():
+    """n_jobs != 1 runs to completion and is pushed down to the populations."""
+    pop = make_pop()
+    evolver = SymGeneEvolver(populations=[pop], n_gen=2, seed=0, n_jobs=2,
+                             verbose=0)
+    results = evolver.fit(X, {"p1": y})
+    assert "p1" in results
+    assert pop.n_jobs == 2
+    assert pop.parallel_backend == "threading"
 
 def test_evolver_verbose2_migration():
     """verbose=2 with migration prints extra info without crashing."""

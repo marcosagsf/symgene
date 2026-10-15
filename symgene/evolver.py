@@ -36,7 +36,12 @@ class SymGeneEvolver:
     seed : int, optional
         Global random seed (applied to both Python ``random`` and NumPy).
     n_jobs : int
-        Reserved for future parallelisation (not yet implemented). Default ``1``.
+        Number of parallel workers for per-individual fitness evaluation,
+        applied to every population in the run. ``1`` (default) evaluates
+        sequentially; ``-1`` uses all cores. See :class:`~symgene.Population`
+        for backend details.
+    parallel_backend : {"threading", "loky", "multiprocessing"}
+        joblib backend used when ``n_jobs != 1``. Default ``"threading"``.
     callbacks : list of Callback, optional
         Training callbacks (e.g. ``EarlyStopping``, ``Logger``).
     checkpoint_dir : str, optional
@@ -107,6 +112,7 @@ class SymGeneEvolver:
         cxpb_inter: float = 0.025,
         seed: int | None = None,
         n_jobs: int = 1,
+        parallel_backend: str = "threading",
         callbacks: list[Any] | None = None,
         checkpoint_dir: str | None = None,
         checkpoint_every: int = 50,
@@ -134,6 +140,7 @@ class SymGeneEvolver:
         self.cxpb_inter = cxpb_inter
         self.seed = seed
         self.n_jobs = n_jobs
+        self.parallel_backend = parallel_backend
         self.callbacks = callbacks or []
         self.checkpoint_dir = checkpoint_dir
         self.checkpoint_every = checkpoint_every
@@ -153,13 +160,6 @@ class SymGeneEvolver:
         self.llm_stagnation_patience = llm_stagnation_patience
         self.llm_rescue_prob = llm_rescue_prob
         self.llm_max_retries = llm_max_retries
-        if n_jobs != 1:
-            import warnings
-            warnings.warn(
-                "n_jobs != 1 is not yet implemented; evolution will run sequentially.",
-                UserWarning,
-                stacklevel=2,
-            )
 
     def _build_logs(self, gen: int, pop_histories: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
         logs = {"gen": gen}
@@ -202,6 +202,9 @@ class SymGeneEvolver:
             np.random.seed(self.seed)
 
         for pop in self.populations:
+            if self.n_jobs != 1:
+                pop.n_jobs = self.n_jobs
+                pop.parallel_backend = self.parallel_backend
             pop.initialize(seed=self.seed)
             pop.evaluate(X, y[pop.name])
 

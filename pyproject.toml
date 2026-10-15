@@ -41,6 +41,7 @@ dependencies = [
     "matplotlib>=3.7",
     "pandas>=2.0",
     "dill>=0.3",
+    "joblib>=1.2",
 ]
 
 [project.optional-dependencies]
