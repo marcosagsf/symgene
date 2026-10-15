@@ -57,12 +57,17 @@ class SymGeneEvolver:
         Migration interval in generations. Default ``50``.
     migration_size : int
         Number of individuals transferred per migration event. Default ``1``.
-    migration_topology : {"ring", "full", "best_to_worst"}
+    migration_topology : {"ring", "full", "best_to_worst", "star", "custom"}
         Network topology for migration. Default ``"ring"``.
     migration_selection : str
         Which individuals to send (``"best"``). Default ``"best"``.
     migration_replace : str
         Which individuals to overwrite (``"worst"``). Default ``"worst"``.
+    migration_hub_index : int
+        Hub island index for ``migration_topology="star"``. Default ``0``.
+    migration_adjacency : np.ndarray, optional
+        Boolean ``(N, N)`` adjacency matrix for
+        ``migration_topology="custom"`` (required in that case).
     llm_client : LLMClient, optional
         Configured LLM client for Genetic Rescue (Phase 3).
     llm_context : dict, optional
@@ -123,6 +128,8 @@ class SymGeneEvolver:
         migration_topology: str = "ring",
         migration_selection: str = "best",
         migration_replace: str = "worst",
+        migration_hub_index: int = 0,
+        migration_adjacency: Any = None,
         # LLM Genetic Rescue
         llm_client: Any = None,
         llm_context: dict[str, Any] | None = None,
@@ -151,6 +158,8 @@ class SymGeneEvolver:
         self.migration_topology = migration_topology
         self.migration_selection = migration_selection
         self.migration_replace = migration_replace
+        self.migration_hub_index = migration_hub_index
+        self.migration_adjacency = migration_adjacency
         self.llm_client = llm_client
         self.llm_context = llm_context or {}
         self.llm_rescue = llm_rescue
@@ -237,6 +246,8 @@ class SymGeneEvolver:
                         size=self.migration_size,
                         selection=self.migration_selection,
                         replace=self.migration_replace,
+                        hub_index=self.migration_hub_index,
+                        adjacency=self.migration_adjacency,
                     )
                     if self.verbose >= 2:
                         print(f"  Gen {gen}: migration ({self.migration_topology},"
