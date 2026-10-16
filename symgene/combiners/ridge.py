@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.linear_model import RidgeCV
 from sklearn.preprocessing import PolynomialFeatures
-from symgene.combiners.base import BaseCombiner
+from symgene.combiners.base import BaseCombiner, polynomial_feature_exprs
 
 class RidgeCombiner(BaseCombiner):
     def __init__(self, alphas: list[float] | None = None, degree: int = 1):
@@ -39,3 +39,14 @@ class RidgeCombiner(BaseCombiner):
             self.gene_weights_ = weights
         else:
             self.gene_weights_ = np.abs(self.coef_)
+
+    def symbolic(self, gene_exprs: list):
+        import sympy as sp
+        if self.degree > 1 and self._poly is not None:
+            feats = polynomial_feature_exprs(gene_exprs, self._poly)
+        else:
+            feats = gene_exprs
+        model = sp.Float(self.bias_)
+        for k, f in enumerate(feats):
+            model += sp.Float(float(self.coef_[k])) * f
+        return model

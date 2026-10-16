@@ -15,3 +15,10 @@ class LinearCombiner(BaseCombiner):
 
     def predict(self, G: np.ndarray) -> np.ndarray:
         return self._model.predict(G)
+
+    def symbolic(self, gene_exprs: list):
+        import sympy as sp
+        model = sp.Float(self.bias_)
+        for gi, g in enumerate(gene_exprs):
+            model += sp.Float(float(self.coef_[gi])) * g
+        return model

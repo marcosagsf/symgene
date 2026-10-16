@@ -49,13 +49,34 @@ class PopulationResult:
 
     @property
     def coefficients_(self) -> np.ndarray | None:
-        """Linear combination weights for the best individual's genes.
+        """Raw combiner coefficients for the best individual.
+
+        These are the weights the combiner fits in *feature* space. For a
+        linear/degree-1 combiner there is one per gene; when
+        ``regression_degree > 1`` the vector lives in the expanded
+        polynomial-feature space (so its length exceeds the gene count).
+        For per-gene importances aligned with the genes, use
+        :attr:`gene_weights_`.
 
         Returns ``None`` if no individual has been evaluated yet.
         """
         ind = self.best_individual_
         if ind is None or not hasattr(ind, '_combiner'): return None
         return ind._combiner.coef_
+
+    @property
+    def gene_weights_(self) -> np.ndarray | None:
+        """Per-gene importance for the best individual (one value per gene).
+
+        Absolute contribution of each gene to the combiner. Unlike
+        :attr:`coefficients_`, this is always aligned with the genes, even
+        when ``regression_degree > 1`` (polynomial terms are aggregated back
+        onto their genes). Returns ``None`` if no individual has been
+        evaluated yet.
+        """
+        ind = self.best_individual_
+        if ind is None or not hasattr(ind, '_combiner'): return None
+        return getattr(ind._combiner, 'gene_weights_', None)
 
     @property
     def best_fitness_(self) -> float:
@@ -69,14 +90,16 @@ class PopulationResult:
     def to_string(self) -> str:
         return self.best_expression_
 
-    def to_sympy(self) -> list[Any]:
-        """Convert the best individual's gene trees to SymPy expressions.
+    def gene_sympy(self) -> list[Any]:
+        """Convert each gene tree of the best individual to a SymPy expression.
 
         Returns
         -------
         list of sympy.Expr
-            One SymPy expression per gene. Returns an empty list if the
-            best individual is ``None`` or conversion fails.
+            One SymPy expression per gene (the raw building blocks, *without*
+            the combiner weights). Returns an empty list if the best
+            individual is ``None``. Entries are ``None`` for genes containing
+            a primitive without a ``sympy_fn``.
 
         Warns
         -----
@@ -84,71 +107,121 @@ class PopulationResult:
             If any primitive lacks a ``sympy_fn`` mapping (registered via
             :meth:`PrimitiveSet.add_custom`).
         """
-        try:
-            import sympy as sp
-            import deap.gp as gp
-            import warnings
+        import sympy as sp
+        import deap.gp as gp
+        import warnings
 
+        ind = self.best_individual_
+        if ind is None:
+            return []
+
+        registry = self._pop.pset.sympy_registry()
+        feature_names = self._pop.pset.feature_names
+        sym_vars = {name: sp.Symbol(name) for name in feature_names}
+
+        def _eval(nodes, idx):
+            node = nodes[idx]
+            if isinstance(node, gp.Primitive):
+                sfn = registry.get(node.name)
+                args = []
+                next_idx = idx + 1
+                for _ in range(node.arity):
+                    arg, next_idx = _eval(nodes, next_idx)
+                    args.append(arg)
+                if sfn is None:
+                    warnings.warn(
+                        f"Primitive '{node.name}' has no sympy_fn. "
+                        "Provide sympy_fn in add_custom() to enable to_sympy().",
+                        UserWarning,
+                        stacklevel=4,
+                    )
+                    return None, next_idx
+                if any(a is None for a in args):
+                    return None, next_idx
+                return sfn(*args), next_idx
+            else:
+                # Argument terminals: DEAP keeps Terminal.name as 'ARG0' but
+                # stores the (renamed) feature name in .value. Ephemeral
+                # constants store their numeric value in .value.
+                value = getattr(node, "value", node.name)
+                if isinstance(value, str):
+                    return sym_vars.get(value, sp.Symbol(value)), idx + 1
+                try:
+                    return sp.Float(float(value)), idx + 1
+                except (TypeError, ValueError):
+                    return sp.Symbol(str(node.name)), idx + 1
+
+        exprs = []
+        for gene in ind:
+            expr, _ = _eval(list(gene), 0)
+            exprs.append(expr)
+        return exprs
+
+    def to_sympy(self) -> Any:
+        """Return the fitted model as a single SymPy expression.
+
+        Combines the gene trees exactly as the combiner does numerically —
+        including the intercept, fitted coefficients, polynomial cross-terms
+        (when ``regression_degree > 1``), and any feature scaling — so the
+        returned expression evaluates to the same values as :meth:`predict`.
+
+        .. note::
+           The output squash (see :meth:`PrimitiveSet.set_squash`) is a
+           numerical guard applied during evaluation and is **not** part of
+           the symbolic form. The expression therefore matches
+           :meth:`predict` exactly only when squashing is disabled; with
+           squashing active it matches wherever the gene outputs stay within
+           the squash limit. Use :meth:`to_callable` for an exact
+           numerical reproduction in all cases.
+
+        Returns
+        -------
+        sympy.Expr or None
+            The model expression, or ``None`` if the best individual is
+            ``None`` or the expression cannot be built (e.g. a primitive
+            without a ``sympy_fn``). Use :meth:`gene_sympy` for the raw,
+            per-gene expressions without the combiner.
+
+        Warns
+        -----
+        UserWarning
+            If any primitive lacks a ``sympy_fn`` mapping, or the model
+            cannot be reconstructed.
+        """
+        import warnings
+        try:
             ind = self.best_individual_
             if ind is None:
-                return []
-
-            registry = self._pop.pset.sympy_registry()
-            feature_names = self._pop.pset.feature_names
-            sym_vars = {name: sp.Symbol(name) for name in feature_names}
-
-            def _eval(nodes, idx):
-                node = nodes[idx]
-                if isinstance(node, gp.Primitive):
-                    sfn = registry.get(node.name)
-                    args = []
-                    next_idx = idx + 1
-                    for _ in range(node.arity):
-                        arg, next_idx = _eval(nodes, next_idx)
-                        args.append(arg)
-                    if sfn is None:
-                        warnings.warn(
-                            f"Primitiva '{node.name}' não possui sympy_fn. "
-                            "Forneça sympy_fn em add_custom() para habilitar to_sympy().",
-                            UserWarning,
-                            stacklevel=4,
-                        )
-                        return None, next_idx
-                    if any(a is None for a in args):
-                        return None, next_idx
-                    return sfn(*args), next_idx
-                else:
-                    name = node.name
-                    if name in sym_vars:
-                        return sym_vars[name], idx + 1
-                    try:
-                        return sp.Float(float(node.value)), idx + 1
-                    except (TypeError, ValueError, AttributeError):
-                        return sp.Symbol(str(name)), idx + 1
-
-            exprs = []
-            for gene in ind:
-                expr, _ = _eval(list(gene), 0)
-                exprs.append(expr)
-            return exprs
+                return None
+            gene_exprs = self.gene_sympy()
+            if not gene_exprs or any(e is None for e in gene_exprs):
+                return None
+            combiner = getattr(ind, "_combiner", None)
+            if combiner is None or not hasattr(combiner, "symbolic"):
+                import sympy as sp
+                return sp.Add(*gene_exprs)
+            return combiner.symbolic(gene_exprs)
         except Exception as exc:
-            import warnings
             warnings.warn(
-                f"to_sympy() failed ({type(exc).__name__}: {exc}); returning empty list.",
+                f"to_sympy() failed ({type(exc).__name__}: {exc}); returning None.",
                 UserWarning,
                 stacklevel=2,
             )
-            return []
+            return None
 
     def to_latex(self) -> str:
+        """LaTeX string of the fitted model (see :meth:`to_sympy`).
+
+        Falls back to :attr:`best_expression_` if the model cannot be
+        converted to SymPy.
+        """
         try:
             import sympy
-            exprs = self.to_sympy()
-            if isinstance(exprs, list) and exprs:
-                parts = [sympy.latex(e) for e in exprs if e is not None]
-                result = " + ".join(p for p in parts if p)
-                if result:
-                    return result
+            expr = self.to_sympy()
+            if expr is not None:
+                latex = sympy.latex(expr)
+                if latex:
+                    return latex
         except Exception as exc:
             import warnings
             warnings.warn(
@@ -287,15 +360,17 @@ class PopulationResult:
             target_name=target_name or self._pop.name,
             feature_names=self._pop.pset.feature_names,
             n_genes=self.n_genes_,
-            coefficients=self.coefficients_,
+            coefficients=self.gene_weights_,
             client=client,
         )
 
     def plot_gene_weights(self, ax: Any = None) -> None:
         from symgene.visualization.population_stats import plot_gene_weights
-        coef = self.coefficients_
-        if coef is not None:
-            plot_gene_weights(coef, pop_name=self._pop.name, ax=ax)
+        weights = self.gene_weights_
+        if weights is None:
+            weights = self.coefficients_
+        if weights is not None:
+            plot_gene_weights(weights, pop_name=self._pop.name, ax=ax)
 
     @property
     def pareto_front_(self) -> list:

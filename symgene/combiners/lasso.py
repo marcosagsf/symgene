@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.linear_model import LassoCV
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler
-from symgene.combiners.base import BaseCombiner
+from symgene.combiners.base import BaseCombiner, polynomial_feature_exprs
 
 class LassoCombiner(BaseCombiner):
     def __init__(self, alphas: list[float] | None = None, degree: int = 1):
@@ -48,3 +48,22 @@ class LassoCombiner(BaseCombiner):
 
     def predict(self, G: np.ndarray) -> np.ndarray:
         return self._model.predict(self._featurize(G))
+
+    def symbolic(self, gene_exprs: list):
+        import sympy as sp
+        if self.degree > 1 and self._poly is not None:
+            feats = polynomial_feature_exprs(gene_exprs, self._poly)
+        else:
+            feats = gene_exprs
+        # predict(f) = intercept_ + sum_k coef_[k] * (f_k - mean_[k]) / scale_[k],
+        # because features are StandardScaler-normalised before LassoCV.
+        model = sp.Float(self.bias_)
+        if self._scaler is not None:
+            mean = self._scaler.mean_
+            scale = self._scaler.scale_
+        else:
+            mean = np.zeros(len(feats))
+            scale = np.ones(len(feats))
+        for k, f in enumerate(feats):
+            model += sp.Float(float(self.coef_[k])) * (f - sp.Float(float(mean[k]))) / sp.Float(float(scale[k]))
+        return model
