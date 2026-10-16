@@ -60,8 +60,8 @@ class AIGuidedEvolver:
         # Skip advisor when validation R² already exceeds this threshold.
         # Set to 0.0 to disable (always allow interventions).
         self.val_r2_threshold = val_r2_threshold
-        # If True: pausa a evolucao e aguarda rate_limit_wait segundos antes de
-        # tentar novamente (conta como 1 intervencao). Se False: skip e cooldown.
+        # If True: pause evolution and wait rate_limit_wait seconds before
+        # retrying (counts as 1 intervention). If False: skip and cooldown.
         self.wait_on_rate_limit = wait_on_rate_limit
         self.rate_limit_wait = rate_limit_wait
         self.verbose = verbose
@@ -100,13 +100,13 @@ class AIGuidedEvolver:
         if self.verbose >= 1:
             if self._diagnostician is None:
                 print(
-                    "[AIGuidedEvolver] Modo dry-run: llm_client=None "
-                    "— triggers sao avaliados mas nao ha intervencao LLM."
+                    "[AIGuidedEvolver] Dry-run mode: llm_client=None "
+                    "— triggers are evaluated but no LLM intervention occurs."
                 )
             else:
                 _prov = getattr(self.llm_client, 'provider', '?')
                 print(
-                    f"[AIGuidedEvolver] Advisor ativo | provider={_prov} | "
+                    f"[AIGuidedEvolver] Advisor active | provider={_prov} | "
                     f"max_interventions={self.max_interventions} | "
                     f"cooldown={self.cooldown} | "
                     f"val_r2_threshold={self.val_r2_threshold}"
@@ -205,7 +205,7 @@ class AIGuidedEvolver:
                                     print(
                                         f"\n[AIGuidedEvolver] Trigger: {fired.name} "
                                         f"at gen {gen} | val_r2={vr_str} "
-                                        f"— dry-run (sem llm_client, nenhuma acao tomada)."
+                                        f"— dry-run (no llm_client, no action taken)."
                                     )
                                 cooldown_remaining = self.cooldown
                             break
@@ -298,25 +298,25 @@ class AIGuidedEvolver:
                 if self.verbose >= 1:
                     if is_quota_exhausted:
                         print(
-                            f"\n[SymGene Advisor] COTA ESGOTADA (gen {gen}): "
+                            f"\n[SymGene Advisor] QUOTA EXHAUSTED (gen {gen}): "
                             f"generativelanguage.googleapis.com/generate_content_free_tier_requests.\n"
-                            f"  Isso nao e um limite por minuto — e a cota total do free tier.\n"
-                            f"  Solucoes: (1) aguarde o reset diario (meia-noite UTC), "
-                            f"(2) ative faturamento no Google Cloud, "
-                            f"(3) use llm_client=None para dry-run.\n"
-                            f"  Advisor desativado por {penalty} geracoes.\n"
+                            f"  This is not a per-minute limit — it is the total free-tier quota.\n"
+                            f"  Options: (1) wait for the daily reset (midnight UTC), "
+                            f"(2) enable billing on Google Cloud, "
+                            f"(3) use llm_client=None for a dry-run.\n"
+                            f"  Advisor disabled for {penalty} generations.\n"
                         )
                     elif is_rate_limit:
                         print(
-                            f"\n[SymGene Advisor] WARNING: limite de taxa (RPM) gen {gen} "
-                            f"— aguardando cooldown de {penalty} gens.\n"
+                            f"\n[SymGene Advisor] WARNING: rate limit (RPM) at gen {gen} "
+                            f"— waiting a cooldown of {penalty} gens.\n"
                             f"  [{exc_type}] {exc_str[:200]}\n"
                         )
                     else:
                         print(
-                            f"\n[SymGene Advisor] WARNING: intervencao falhou "
-                            f"gen {gen}: [{exc_type}] {exc_str[:300]}\n"
-                            "  Evolucao continua normalmente.\n"
+                            f"\n[SymGene Advisor] WARNING: intervention failed "
+                            f"at gen {gen}: [{exc_type}] {exc_str[:300]}\n"
+                            "  Evolution continues normally.\n"
                         )
 
                 self._advisor_log.append({
@@ -338,17 +338,17 @@ class AIGuidedEvolver:
             wait_sec = self.rate_limit_wait
             if self.verbose >= 1:
                 print(
-                    f"  [SymGene Advisor] Aguardando {wait_sec}s para retentar "
+                    f"  [SymGene Advisor] Waiting {wait_sec}s before retrying "
                     f"(wait_on_rate_limit=True)..."
                 )
             time.sleep(wait_sec)
             success2, penalty2 = _attempt()
             if success2:
                 if self.verbose >= 1:
-                    print("  [SymGene Advisor] Retentativa OK apos espera.\n")
+                    print("  [SymGene Advisor] Retry succeeded after waiting.\n")
                 return 0
             if self.verbose >= 1:
-                print("  [SymGene Advisor] Retentativa falhou. Cooldown aplicado.\n")
+                print("  [SymGene Advisor] Retry failed. Cooldown applied.\n")
             return penalty2
 
         if is_rate_limit and self.verbose >= 1:
@@ -360,7 +360,7 @@ class AIGuidedEvolver:
     def _print_block(self, gen: int, diagnosis: Diagnosis, trigger: BaseTrigger) -> None:
         print(f"\n{_BORDER}")
         print(f"  ◆ SymGene Advisor [Gen {gen}] | Trigger: {trigger.name}")
-        print(f"  Causa: {diagnosis.root_cause} | Acao: {diagnosis.recommended_action}")
+        print(f"  Cause: {diagnosis.root_cause} | Action: {diagnosis.recommended_action}")
         for line in textwrap.wrap(diagnosis.advisor_message, width=50):
             print(f"  {line}")
         print(f"{_BORDER}")
@@ -376,21 +376,21 @@ class AIGuidedEvolver:
         if action == "genetic_rescue":
             if n == 0:
                 body = (
-                    f"Resgate genetico FALHOU: nenhum individuo substituido. "
-                    f"Pode indicar que o LLM gerou expressoes com tokens invalidos. "
-                    f"Evolucao continua normalmente."
+                    f"Genetic rescue FAILED: no individual replaced. "
+                    f"This may mean the LLM produced expressions with invalid tokens. "
+                    f"Evolution continues normally."
                 )
             else:
                 fallback_n = n - llm_n
                 parts = []
                 if llm_n > 0:
-                    parts.append(f"{llm_n} expressao(oes) injetada(s) pelo LLM")
+                    parts.append(f"{llm_n} expression(s) injected by the LLM")
                 if fallback_n > 0:
-                    parts.append(f"{fallback_n} regenerado(s) aleatoriamente pelo toolbox")
+                    parts.append(f"{fallback_n} regenerated randomly by the toolbox")
                 body = (
-                    f"Resgate genetico concluido: {n} individuo(s) substituidos "
-                    f"({'; '.join(parts)}). Os piores {n} individuos foram substituidos "
-                    f"por novas estruturas. R² validacao: {val_r2_str}."
+                    f"Genetic rescue complete: {n} individual(s) replaced "
+                    f"({'; '.join(parts)}). The worst {n} individuals were replaced "
+                    f"with new structures. Validation R²: {val_r2_str}."
                 )
         elif action in ("adjust_parameters", "adjust_mutation_rate"):
             changes = action_result.get("changes", {})
@@ -399,33 +399,33 @@ class AIGuidedEvolver:
                     f"{k}: {v['from']}→{v['to']}" for k, v in changes.items()
                 ]
                 body = (
-                    f"Parametros evolutivos ajustados: {', '.join(change_strs)}. "
-                    f"R² validacao: {val_r2_str}."
+                    f"Evolutionary parameters adjusted: {', '.join(change_strs)}. "
+                    f"Validation R²: {val_r2_str}."
                 )
             else:
-                body = f"Nenhum parametro alterado (valores ja no limite). R²={val_r2_str}."
+                body = f"No parameter changed (values already at their limits). R²={val_r2_str}."
         elif action == "suggest_primitive":
             if n > 0:
                 pname = action_result.get("name", "?")
                 desc = action_result.get("description", "")
                 lstr = action_result.get("lambda_str", "")[:60]
                 body = (
-                    f"Nova primitiva '{pname}' (aridade={action_result.get('arity', '?')}) "
-                    f"adicionada ao pset: {lstr}. "
+                    f"New primitive '{pname}' (arity={action_result.get('arity', '?')}) "
+                    f"added to the pset: {lstr}. "
                     f"{desc[:80]} R²={val_r2_str}."
                 )
             else:
-                reason = action_result.get("reason", "erro desconhecido")
-                body = f"Sugestao de primitiva FALHOU: {reason}. R²={val_r2_str}."
+                reason = action_result.get("reason", "unknown error")
+                body = f"Primitive suggestion FAILED: {reason}. R²={val_r2_str}."
         elif action == "restart_worst":
             body = (
-                f"Reinicio dos {n} piores individuos com expressoes aleatorias. "
-                f"R² validacao: {val_r2_str}."
+                f"Restarted the {n} worst individuals with random expressions. "
+                f"Validation R²: {val_r2_str}."
             )
         elif action == "suggest_early_stop":
-            body = f"Parada antecipada sugerida — modelo convergido (R²={val_r2_str})."
+            body = f"Early stop suggested — model converged (R²={val_r2_str})."
         else:
-            body = f"Acao '{action}': {n} elemento(s) afetado(s). R²={val_r2_str}."
+            body = f"Action '{action}': {n} element(s) affected. R²={val_r2_str}."
 
         for line in textwrap.wrap(f"  >> {body}", width=54):
             print(line)
